@@ -851,9 +851,11 @@ ${stepsText}
     let waText = '💊 *My Prescription Summary*\n_(via TriageAI Prescription Translator)_\n\n';
 
     medicines.forEach((m, i) => {
-      html += `<div class="rx-medicine">
-        <div class="rx-medicine-name">💊 ${m.name}</div>
+      const unclearBorder = m.unclear ? 'border-color:#ffe082;' : '';
+      html += `<div class="rx-medicine" style="${unclearBorder}">
+        <div class="rx-medicine-name">💊 ${m.name}${m.unclear ? ' <span style="font-size:13px;color:var(--amber)">⚠️ Unclear</span>' : ''}</div>
         <div class="rx-rows">
+          ${m.generic ? `<div class="rx-row"><span class="rx-row-icon">🔬</span><span class="rx-row-label">Generic</span><span class="rx-row-val">${m.generic}</span></div>` : ''}
           ${m.dosage ? `<div class="rx-row"><span class="rx-row-icon">📏</span><span class="rx-row-label">Dosage</span><span class="rx-row-val">${m.dosage}</span></div>` : ''}
           ${m.frequency ? `<div class="rx-row"><span class="rx-row-icon">⏰</span><span class="rx-row-label">Frequency</span><span class="rx-row-val">${m.frequency}</span></div>` : ''}
           ${m.duration ? `<div class="rx-row"><span class="rx-row-icon">📅</span><span class="rx-row-label">Duration</span><span class="rx-row-val">${m.duration}</span></div>` : ''}
@@ -861,7 +863,8 @@ ${stepsText}
           ${m.warnings ? `<div class="rx-row rx-warning-row"><span class="rx-row-icon">⚠️</span><span class="rx-row-label">Warning</span><span class="rx-row-val">${m.warnings}</span></div>` : ''}
         </div>
       </div>`;
-      waText += `*${i+1}. ${m.name}*\n`;
+      waText += `*${i+1}. ${m.name}*${m.unclear ? ' ⚠️ Unclear' : ''}\n`;
+      if (m.generic) waText += `🔬 Generic: ${m.generic}\n`;
       if (m.dosage) waText += `📏 Dosage: ${m.dosage}\n`;
       if (m.frequency) waText += `⏰ Frequency: ${m.frequency}\n`;
       if (m.duration) waText += `📅 Duration: ${m.duration}\n`;
