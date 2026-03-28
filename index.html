@@ -481,7 +481,8 @@ Steps must be practical for rural India. Warm tone.`
 
       if (userLat && userLng) {
         document.getElementById('hospitalsCard').classList.add('visible');
-        fetchNearbyHospitals(userLat, userLng);
+        const condition = classifyCondition(symptoms, result.urgency);
+        fetchNearbyHospitals(userLat, userLng, condition);
       }
 
     } catch(err) {
@@ -534,15 +535,30 @@ ${stepsText}
     document.getElementById('whatsappBtn').href = `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
   }
 
-  async function fetchNearbyHospitals(lat, lng) {
-    const query = `[out:json][timeout:25];(
-      node["amenity"="hospital"](around:10000,${lat},${lng});
-      way["amenity"="hospital"](around:10000,${lat},${lng});
-      node["amenity"="clinic"](around:10000,${lat},${lng});
-      node["amenity"="doctors"](around:10000,${lat},${lng});
-      node["healthcare"="hospital"](around:10000,${lat},${lng});
-      node["healthcare"="clinic"](around:10000,${lat},${lng});
-    );out center 10;`;
+  function classifyCondition(symptoms, urgency) {
+    const s = symptoms.toLowerCase();
+    if (/chest pain|cardiac|heart|palpitation|angina/.test(s))
+      return { type: 'cardiac', label: 'Cardiac / Chest Pain', mapsQuery: 'cardiac hospital emergency', amenities: ['hospital'], radius: 15000 };
+    if (/pregnan|maternity|labour|labor|gynec|delivery|obstet/.test(s))
+      return { type: 'maternity', label: 'Maternity / Gynecology', mapsQuery: 'maternity hospital gynecologist', amenities: ['hospital', 'clinic'], radius: 15000 };
+    if (/snake|animal bite|dog bite|scorpion|rabies/.test(s))
+      return { type: 'emergency', label: 'Emergency / Animal Bite', mapsQuery: 'government hospital emergency', amenities: ['hospital'], radius: 20000 };
+    if (/diabet|blood sugar|insulin|glucose/.test(s))
+      return { type: 'diabetes', label: 'Diabetic Care', mapsQuery: 'diabetic care clinic doctor', amenities: ['clinic', 'doctors', 'hospital'], radius: 10000 };
+    if (/fever|infection|malaria|dengue|typhoid|cold|flu|cough/.test(s))
+      return { type: 'fever', label: 'General Physician / Clinic', mapsQuery: 'general physician clinic', amenities: ['clinic', 'doctors', 'hospital'], radius: 10000 };
+    if (urgency === 'red')
+      return { type: 'emergency', label: 'Emergency Care', mapsQuery: 'hospital emergency', amenities: ['hospital'], radius: 20000 };
+    return { type: 'general', label: 'Clinic / Doctor', mapsQuery: 'clinic doctor', amenities: ['clinic', 'doctors', 'hospital'], radius: 10000 };
+  }
+
+  async function fetchNearbyHospitals(lat, lng, condition) {
+    const radius = condition.radius;
+    const amenityLines = condition.amenities.flatMap(a => [
+      `node["amenity"="${a}"](around:${radius},${lat},${lng});`,
+      ...(a === 'hospital' ? [`way["amenity"="${a}"](around:${radius},${lat},${lng});`] : [])
+    ]).join('\n      ');
+    const query = `[out:json][timeout:25];(\n      ${amenityLines}\n    );out center 10;`;
 
     try {
       const resp = await fetch('https://overpass-api.de/api/interpreter', {
@@ -567,10 +583,10 @@ ${stepsText}
         .sort((a, b) => a.dist - b.dist)
         .slice(0, 6);
 
-      if (elements.length === 0) { showMapsFallback(lat, lng); return; }
-      renderHospitals(elements, lat, lng);
+      if (elements.length === 0) { showMapsFallback(lat, lng, condition); return; }
+      renderHospitals(elements, lat, lng, condition);
     } catch(e) {
-      showMapsFallback(lat, lng);
+      showMapsFallback(lat, lng, condition);
     }
   }
 
@@ -580,10 +596,12 @@ ${stepsText}
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
-  function renderHospitals(facilities, lat, lng) {
+  function renderHospitals(facilities, lat, lng, condition) {
     const icons = { hospital: '🏥', clinic: '🏨', doctors: '👨‍⚕️' };
-    document.getElementById('hospitalsSubtitle').textContent = `${facilities.length} facilities found within 15km`;
+    const kmRadius = Math.round(condition.radius / 1000);
+    document.getElementById('hospitalsSubtitle').textContent = `${facilities.length} ${condition.label} facilities within ${kmRadius}km`;
 
+    const mapsSearch = encodeURIComponent(condition.mapsQuery);
     let html = '<div class="hospitals-list">';
     facilities.forEach(f => {
       const dist = f.dist < 1 ? `${Math.round(f.dist*1000)}m` : `${f.dist.toFixed(1)}km`;
@@ -602,16 +620,17 @@ ${stepsText}
         </div>`;
     });
     html += '</div>';
-    html += `<a href="https://www.google.com/maps/search/hospital/@${lat},${lng},13z" target="_blank" class="gmaps-link">🔍 Search more on Google Maps</a>`;
+    html += `<a href="https://www.google.com/maps/search/${mapsSearch}/@${lat},${lng},13z" target="_blank" class="gmaps-link">🔍 Search "${condition.mapsQuery}" on Google Maps</a>`;
     document.getElementById('hospitalsList').innerHTML = html;
   }
 
-  function showMapsFallback(lat, lng) {
-    document.getElementById('hospitalsSubtitle').textContent = 'Search on Google Maps';
+  function showMapsFallback(lat, lng, condition) {
+    const mapsSearch = encodeURIComponent(condition.mapsQuery);
+    document.getElementById('hospitalsSubtitle').textContent = `Search for ${condition.label}`;
     document.getElementById('hospitalsList').innerHTML = `
       <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
-        <a href="https://www.google.com/maps/search/hospital/@${lat},${lng},13z" target="_blank" class="gmaps-link">🏥 Find Hospitals Near Me</a>
-        <a href="https://www.google.com/maps/search/clinic+doctor/@${lat},${lng},14z" target="_blank" class="gmaps-link">👨‍⚕️ Find Doctors & Clinics</a>
+        <a href="https://www.google.com/maps/search/${mapsSearch}/@${lat},${lng},13z" target="_blank" class="gmaps-link">🏥 Find ${condition.label} Near Me</a>
+        <a href="https://www.google.com/maps/search/hospital/@${lat},${lng},13z" target="_blank" class="gmaps-link">🔍 Search All Hospitals</a>
       </div>`;
   }
 
