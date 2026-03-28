@@ -39,8 +39,15 @@
   .field-group label { font-size: 11px; font-weight: 600; color: var(--ink-muted); letter-spacing: 0.5px; text-transform: uppercase; }
   .field-group input, .field-group select { height: 42px; border: 1.5px solid var(--border); border-radius: 8px; padding: 0 14px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--ink); background: var(--bg); outline: none; transition: border-color 0.2s; appearance: none; }
   .field-group input:focus, .field-group select:focus, textarea:focus { border-color: var(--green-mid); }
-  textarea { width: 100%; border: 1.5px solid var(--border); border-radius: 10px; padding: 14px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--ink); background: var(--bg); outline: none; resize: vertical; min-height: 120px; line-height: 1.6; margin-bottom: 16px; transition: border-color 0.2s; }
+  textarea { width: 100%; border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 14px 48px 14px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--ink); background: var(--bg); outline: none; resize: vertical; min-height: 120px; line-height: 1.6; transition: border-color 0.2s; }
   textarea::placeholder { color: var(--ink-faint); }
+  .textarea-wrap { position: relative; margin-bottom: 8px; }
+  .mic-btn { position: absolute; bottom: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: none; background: #e0e0e0; color: #666; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; z-index: 2; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .mic-btn:hover { background: #d0d0d0; }
+  .mic-btn.listening { background: #e53935; color: white; animation: micPulse 1s ease-in-out infinite; }
+  .mic-btn.done { background: var(--green-mid); color: white; }
+  @keyframes micPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,57,53,0.5); } 50% { box-shadow: 0 0 0 10px rgba(229,57,53,0); } }
+  .mic-hint { font-size: 11px; color: var(--ink-faint); margin-bottom: 14px; }
   .quick-label { font-size: 11px; font-weight: 600; color: var(--ink-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; display: block; }
   .quick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
   .chip { padding: 6px 14px; border: 1.5px solid var(--border); border-radius: 100px; font-size: 12px; color: var(--ink-muted); cursor: pointer; background: var(--bg); transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
@@ -180,7 +187,11 @@
         </div>
       </div>
 
-      <textarea id="symptoms" placeholder="e.g. High fever for 3 days, body pain and headache. No vomiting but feeling very weak. Nearest hospital is 2 hours away..."></textarea>
+      <div class="textarea-wrap">
+        <textarea id="symptoms" placeholder="e.g. High fever for 3 days, body pain and headache. No vomiting but feeling very weak. Nearest hospital is 2 hours away..."></textarea>
+        <button class="mic-btn" id="micBtn" title="Tap to speak" style="display:none" onclick="toggleMic()">🎤</button>
+      </div>
+      <div class="mic-hint" id="micHint" style="display:none">🎤 Speak in any language — Hindi, বাংলা, ಕನ್ನಡ, தமிழ், తెలుగు, English</div>
 
       <span class="quick-label">Quick add symptoms</span>
       <div class="quick-chips">
@@ -495,6 +506,67 @@ ${stepsText}
         <a href="https://www.google.com/maps/search/clinic+doctor/@${lat},${lng},14z" target="_blank" class="gmaps-link">👨‍⚕️ Find Doctors & Clinics</a>
       </div>`;
   }
+
+  // Voice input
+  (function initMic() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const btn = document.getElementById('micBtn');
+    const hint = document.getElementById('micHint');
+    btn.style.display = 'flex';
+    hint.style.display = 'block';
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-IN';
+
+    let listening = false;
+    let baseText = '';
+
+    recognition.onstart = () => {
+      listening = true;
+      baseText = document.getElementById('symptoms').value;
+      btn.textContent = '🔴';
+      btn.classList.add('listening');
+      btn.title = 'Listening...';
+    };
+
+    recognition.onresult = e => {
+      let interim = '';
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        e.results[i].isFinal ? final += t : interim += t;
+      }
+      document.getElementById('symptoms').value = baseText + (baseText && (final || interim) ? ' ' : '') + (final || interim);
+    };
+
+    recognition.onend = () => {
+      listening = false;
+      // Commit whatever is in the textarea as the new base
+      btn.textContent = '✅';
+      btn.classList.remove('listening');
+      btn.classList.add('done');
+      btn.title = 'Tap to speak';
+      setTimeout(() => {
+        btn.textContent = '🎤';
+        btn.classList.remove('done');
+      }, 1500);
+    };
+
+    recognition.onerror = () => {
+      listening = false;
+      btn.textContent = '🎤';
+      btn.classList.remove('listening');
+    };
+
+    window.toggleMic = () => {
+      if (listening) { recognition.stop(); return; }
+      try { recognition.start(); } catch(e) {}
+    };
+  })();
 
   function resetAll() {
     document.getElementById('inputCard').style.display = 'block';
