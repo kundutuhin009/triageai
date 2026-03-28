@@ -358,8 +358,8 @@
     <div class="card-header">
       <div class="card-header-icon" style="background:#ede7f6">📋</div>
       <div class="card-header-text">
-        <h2>Prescription Translator</h2>
-        <p>Can't read your doctor's handwriting? Upload a photo or PDF</p>
+        <h2>Medical Document Reader</h2>
+        <p>Prescription, clinical note, lab report — we'll organise it clearly</p>
       </div>
     </div>
     <div class="card-body">
@@ -386,8 +386,8 @@
       <div class="rx-upload-area" id="rxUploadArea" onclick="document.getElementById('rxFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="rxHandleDrop(event)">
         <input type="file" id="rxFileInput" accept="image/*,.pdf" onchange="rxHandleFile(this.files[0])">
         <div class="rx-upload-icon">📷</div>
-        <div class="rx-upload-title">Tap to upload prescription</div>
-        <div class="rx-upload-sub">Photo (JPG, PNG) or PDF · Max 5MB</div>
+        <div class="rx-upload-title">📎 Upload Medical Document</div>
+        <div class="rx-upload-sub">Works with prescriptions, clinical notes, lab reports — handwritten or typed</div>
       </div>
 
       <div class="rx-preview" id="rxPreview">
@@ -396,7 +396,7 @@
       </div>
 
       <button class="rx-translate-btn" id="rxTranslateBtn" onclick="rxTranslate()" disabled>
-        🔍 Read My Prescription
+        🔍 Read Document
       </button>
 
       <div class="rx-result" id="rxResult">
@@ -414,7 +414,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
           Send to Doctor / Family via WhatsApp
         </a>
-        <button class="rx-reset-btn" onclick="rxReset()">← Translate Another Prescription</button>
+        <button class="rx-reset-btn" onclick="rxReset()">← Read Another Document</button>
       </div>
     </div>
   </div>
@@ -984,54 +984,108 @@ ${stepsText}
   function rxResetBtn() {
     const btn = document.getElementById('rxTranslateBtn');
     btn.disabled = false;
-    btn.innerHTML = '🔍 Read My Prescription';
+    btn.innerHTML = '🔍 Read Document';
   }
 
   function rxShowResult(data) {
-    const medicines = data.medicines || [];
     let html = '';
-    let waText = '💊 *My Prescription Summary*\n_(via TriageAI Prescription Translator)_\n\n';
+    let waText = '';
+    const type = data.document_type || 'prescription';
 
-    medicines.forEach((m, i) => {
-      const unclearBorder = m.unclear ? 'border-color:#ffe082;' : '';
-      html += `<div class="rx-medicine" style="${unclearBorder}">
-        <div class="rx-medicine-name">💊 ${m.name}${m.unclear ? ' <span style="font-size:13px;color:var(--amber)">⚠️ Unclear</span>' : ''}</div>
-        <div class="rx-rows">
-          ${m.generic ? `<div class="rx-row"><span class="rx-row-icon">🔬</span><span class="rx-row-label">Generic</span><span class="rx-row-val">${m.generic}</span></div>` : ''}
-          ${m.dosage ? `<div class="rx-row"><span class="rx-row-icon">📏</span><span class="rx-row-label">Dosage</span><span class="rx-row-val">${m.dosage}</span></div>` : ''}
-          ${m.frequency ? `<div class="rx-row"><span class="rx-row-icon">⏰</span><span class="rx-row-label">Frequency</span><span class="rx-row-val">${m.frequency}</span></div>` : ''}
-          ${m.duration ? `<div class="rx-row"><span class="rx-row-icon">📅</span><span class="rx-row-label">Duration</span><span class="rx-row-val">${m.duration}</span></div>` : ''}
-          ${m.purpose ? `<div class="rx-row"><span class="rx-row-icon">🎯</span><span class="rx-row-label">Purpose</span><span class="rx-row-val">${m.purpose}</span></div>` : ''}
-          ${m.warnings ? `<div class="rx-row rx-warning-row"><span class="rx-row-icon">⚠️</span><span class="rx-row-label">Warning</span><span class="rx-row-val">${m.warnings}</span></div>` : ''}
-        </div>
-      </div>`;
-      waText += `*${i+1}. ${m.name}*${m.unclear ? ' ⚠️ Unclear' : ''}\n`;
-      if (m.generic) waText += `🔬 Generic: ${m.generic}\n`;
-      if (m.dosage) waText += `📏 Dosage: ${m.dosage}\n`;
-      if (m.frequency) waText += `⏰ Frequency: ${m.frequency}\n`;
-      if (m.duration) waText += `📅 Duration: ${m.duration}\n`;
-      if (m.purpose) waText += `🎯 For: ${m.purpose}\n`;
-      if (m.warnings) waText += `⚠️ Warning: ${m.warnings}\n`;
+    const typeLabels = { prescription: '💊 Prescription', clinical_note: '📋 Clinical Note', lab_report: '🧪 Lab Report' };
+    html += `<div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-muted);margin-bottom:12px">${typeLabels[type] || '📄 Medical Document'}</div>`;
+    waText = `${typeLabels[type] || '📄 Medical Document'}\n_(via TriageAI Medical Document Reader)_\n\n`;
+
+    // PRESCRIPTION
+    if (type === 'prescription') {
+      (data.medicines || []).forEach((m, i) => {
+        const unclearBorder = m.unclear ? 'border-color:#ffe082;' : '';
+        html += `<div class="rx-medicine" style="${unclearBorder}">
+          <div class="rx-medicine-name">💊 ${m.name}${m.unclear ? ' <span style="font-size:13px;color:var(--amber)">⚠️ Unclear</span>' : ''}</div>
+          <div class="rx-rows">
+            ${m.generic ? `<div class="rx-row"><span class="rx-row-icon">🔬</span><span class="rx-row-label">Generic</span><span class="rx-row-val">${m.generic}</span></div>` : ''}
+            ${m.dosage ? `<div class="rx-row"><span class="rx-row-icon">📏</span><span class="rx-row-label">Dosage</span><span class="rx-row-val">${m.dosage}</span></div>` : ''}
+            ${m.frequency ? `<div class="rx-row"><span class="rx-row-icon">⏰</span><span class="rx-row-label">Frequency</span><span class="rx-row-val">${m.frequency}</span></div>` : ''}
+            ${m.duration ? `<div class="rx-row"><span class="rx-row-icon">📅</span><span class="rx-row-label">Duration</span><span class="rx-row-val">${m.duration}</span></div>` : ''}
+            ${m.purpose ? `<div class="rx-row"><span class="rx-row-icon">🎯</span><span class="rx-row-label">Purpose</span><span class="rx-row-val">${m.purpose}</span></div>` : ''}
+            ${m.warnings ? `<div class="rx-row rx-warning-row"><span class="rx-row-icon">⚠️</span><span class="rx-row-label">Warning</span><span class="rx-row-val">${m.warnings}</span></div>` : ''}
+          </div>
+        </div>`;
+        waText += `*${i+1}. ${m.name}*${m.unclear ? ' ⚠️ Unclear' : ''}\n`;
+        if (m.generic) waText += `🔬 Generic: ${m.generic}\n`;
+        if (m.dosage) waText += `📏 Dosage: ${m.dosage}\n`;
+        if (m.frequency) waText += `⏰ Frequency: ${m.frequency}\n`;
+        if (m.duration) waText += `📅 Duration: ${m.duration}\n`;
+        if (m.purpose) waText += `🎯 For: ${m.purpose}\n`;
+        if (m.warnings) waText += `⚠️ Warning: ${m.warnings}\n`;
+        waText += '\n';
+      });
+    }
+
+    // CLINICAL NOTE
+    if (type === 'clinical_note' && data.clinical) {
+      const c = data.clinical;
+      const fields = [
+        ['👤', 'Patient', c.patient],
+        ['🔍', 'Chief Complaint', c.chief_complaint],
+        ['📋', 'Examination', c.examination],
+        ['📊', 'Diagnosis', c.diagnosis],
+        ['📝', "Doctor's Plan", c.plan],
+      ];
+      html += `<div class="rx-medicine">`;
+      fields.forEach(([icon, label, val]) => {
+        if (val) {
+          html += `<div class="rx-row" style="margin-bottom:8px"><span class="rx-row-icon">${icon}</span><span class="rx-row-label">${label}</span><span class="rx-row-val">${val}</span></div>`;
+          waText += `${icon} *${label}:* ${val}\n`;
+        }
+      });
+      if (c.tests_recommended?.length) {
+        const tests = c.tests_recommended.join(', ');
+        html += `<div class="rx-row" style="margin-bottom:8px"><span class="rx-row-icon">🔬</span><span class="rx-row-label">Tests</span><span class="rx-row-val">${tests}</span></div>`;
+        waText += `🔬 *Tests:* ${tests}\n`;
+      }
+      html += `</div>`;
       waText += '\n';
-    });
+    }
 
+    // LAB REPORT
+    if (type === 'lab_report') {
+      (data.lab_tests || []).forEach(t => {
+        const abnormalStyle = t.abnormal ? 'border-color:#ffcdd2;' : '';
+        html += `<div class="rx-medicine" style="${abnormalStyle}">
+          <div class="rx-medicine-name">🧪 ${t.name}${t.abnormal ? ' <span style="font-size:13px;color:var(--red)">⚠️ Abnormal</span>' : ' <span style="font-size:13px;color:var(--green)">✅ Normal</span>'}</div>
+          <div class="rx-rows">
+            <div class="rx-row"><span class="rx-row-icon">📊</span><span class="rx-row-label">Result</span><span class="rx-row-val" style="${t.abnormal ? 'color:var(--red);font-weight:600' : ''}">${t.result}</span></div>
+            ${t.normal_range ? `<div class="rx-row"><span class="rx-row-icon">✅</span><span class="rx-row-label">Normal</span><span class="rx-row-val">${t.normal_range}</span></div>` : ''}
+            ${t.meaning ? `<div class="rx-row"><span class="rx-row-icon">💡</span><span class="rx-row-label">Meaning</span><span class="rx-row-val">${t.meaning}</span></div>` : ''}
+          </div>
+        </div>`;
+        waText += `🧪 *${t.name}*${t.abnormal ? ' ⚠️ Abnormal' : ' ✅ Normal'}\n`;
+        waText += `📊 Result: ${t.result}\n`;
+        if (t.normal_range) waText += `✅ Normal range: ${t.normal_range}\n`;
+        if (t.meaning) waText += `💡 Meaning: ${t.meaning}\n`;
+        waText += '\n';
+      });
+    }
+
+    // Shared footer fields
     if (data.doctor_notes) {
-      html += `<div class="rx-notes">📝 <strong>Doctor's notes:</strong> ${data.doctor_notes}</div>`;
-      waText += `📝 *Doctor's notes:* ${data.doctor_notes}\n\n`;
+      html += `<div class="rx-notes">📝 <strong>Notes:</strong> ${data.doctor_notes}</div>`;
+      waText += `📝 *Notes:* ${data.doctor_notes}\n\n`;
     }
     if (data.follow_up) {
       html += `<div class="rx-notes" style="margin-top:8px">🔁 <strong>Follow-up:</strong> ${data.follow_up}</div>`;
       waText += `🔁 *Follow-up:* ${data.follow_up}\n\n`;
     }
 
-    waText += '⚠️ Always verify with your pharmacist before taking any medicine.\nGenerated by TriageAI — triageai-omega.vercel.app';
+    waText += 'Generated by TriageAI — triageai-omega.vercel.app';
 
     document.getElementById('rxMedicineList').innerHTML = html;
     document.getElementById('rxWaBtn').href = `https://wa.me/?text=${encodeURIComponent(waText)}`;
     document.getElementById('rxResult').classList.add('visible');
     const btn = document.getElementById('rxTranslateBtn');
     btn.disabled = false;
-    btn.innerHTML = '🔍 Read My Prescription';
+    btn.innerHTML = '🔍 Read Document';
     document.getElementById('rxResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -1044,7 +1098,7 @@ ${stepsText}
     document.getElementById('rxResult').classList.remove('visible');
     document.getElementById('rxMedicineList').innerHTML = '';
     document.getElementById('rxTranslateBtn').disabled = true;
-    document.getElementById('rxTranslateBtn').innerHTML = '🔍 Read My Prescription';
+    document.getElementById('rxTranslateBtn').innerHTML = '🔍 Read Document';
     document.getElementById('pharmaciesCard').classList.remove('visible');
     document.getElementById('rxLocationBtn').disabled = false;
     document.getElementById('rxLocationBtn').textContent = '📍 Share Location';
