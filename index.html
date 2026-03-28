@@ -631,8 +631,9 @@
       pos => {
         btn.textContent = '✅ Location found';
         status.className = 'location-status visible success';
-        status.textContent = '✅ Finding nearby hospitals...';
+        status.textContent = '✅ Got it!';
         document.getElementById('hospitalsCard').classList.add('visible');
+        document.getElementById('hospitalsSubtitle').textContent = 'Searching within 5km...';
         const symptoms = document.getElementById('symptoms').value;
         const urgency = document.getElementById('urgencyBanner').className.replace('urgency-banner ', '').trim();
         const assessment = document.getElementById('assessmentText').textContent;
@@ -779,42 +780,59 @@ ${stepsText}
     return h(s, 10000, 'general', 'Hospital / Clinic', 'general hospital clinic', ['clinic', 'doctors', 'hospital']);
   }
 
-  async function fetchNearbyHospitals(lat, lng, condition) {
-    const radius = condition.radius;
-    const amenityLines = condition.amenities.flatMap(a => [
+  async function overpassQuery(amenities, radius, lat, lng) {
+    const lines = amenities.flatMap(a => [
       `node["amenity"="${a}"](around:${radius},${lat},${lng});`,
       ...(a === 'hospital' ? [`way["amenity"="${a}"](around:${radius},${lat},${lng});`] : [])
     ]).join('\n      ');
-    const query = `[out:json][timeout:25];(\n      ${amenityLines}\n    );out center 10;`;
+    const q = `[out:json][timeout:25];(\n      ${lines}\n    );out center 10;`;
+    const resp = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(q)
+    });
+    return resp.json();
+  }
 
-    try {
-      const resp = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: 'data=' + encodeURIComponent(query)
-      });
-      const data = await resp.json();
-      const elements = (data.elements || [])
-        .filter(e => e.tags?.name)
-        .map(e => {
-          const eLat = e.lat || e.center?.lat;
-          const eLng = e.lon || e.center?.lon;
-          return {
-            name: e.tags['name:en'] || e.tags.name,
-            type: e.tags.amenity || e.tags.healthcare || 'hospital',
-            dist: haversine(lat, lng, eLat, eLng),
-            lat: eLat, lng: eLng,
-            phone: e.tags.phone || e.tags['contact:phone'] || null
-          };
-        })
-        .filter(f => f.dist <= 15)
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 6);
+  async function fetchNearbyHospitals(lat, lng, condition) {
+    const isRed = condition.type === 'emergency';
+    const radii = isRed ? [30000] : [5000, 15000, 30000];
 
-      if (elements.length === 0) { showMapsFallback(lat, lng, condition); return; }
-      renderHospitals(elements, lat, lng, condition);
-    } catch(e) {
-      showMapsFallback(lat, lng, condition);
+    for (let i = 0; i < radii.length; i++) {
+      const r = radii[i];
+      const km = r / 1000;
+
+      if (i > 0 || isRed) {
+        const msg = isRed
+          ? `🚨 Emergency — searching up to ${km}km...`
+          : `No hospitals within ${radii[i-1]/1000}km — expanding to ${km}km...`;
+        document.getElementById('hospitalsSubtitle').textContent = msg;
+      }
+
+      try {
+        const data = await overpassQuery(condition.amenities, r, lat, lng);
+        const elements = (data.elements || [])
+          .filter(e => e.tags?.name)
+          .map(e => {
+            const eLat = e.lat || e.center?.lat;
+            const eLng = e.lon || e.center?.lon;
+            return {
+              name: e.tags['name:en'] || e.tags.name,
+              type: e.tags.amenity || e.tags.healthcare || 'hospital',
+              dist: haversine(lat, lng, eLat, eLng),
+              lat: eLat, lng: eLng,
+              phone: e.tags.phone || e.tags['contact:phone'] || null
+            };
+          })
+          .filter(f => f.dist <= km)
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, 6);
+
+        if (elements.length > 0) {
+          renderHospitals(elements, lat, lng, condition, km);
+          return;
+        }
+      } catch(e) { /* try next radius */ }
     }
+    showMapsFallback(lat, lng, condition);
   }
 
   function haversine(lat1, lng1, lat2, lng2) {
@@ -823,10 +841,9 @@ ${stepsText}
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
-  function renderHospitals(facilities, lat, lng, condition) {
+  function renderHospitals(facilities, lat, lng, condition, km) {
     const icons = { hospital: '🏥', clinic: '🏨', doctors: '👨‍⚕️' };
-    const kmRadius = Math.round(condition.radius / 1000);
-    document.getElementById('hospitalsSubtitle').textContent = `${facilities.length} ${condition.label} facilities within ${kmRadius}km`;
+    document.getElementById('hospitalsSubtitle').textContent = `Found ${facilities.length} ${condition.label} ${facilities.length === 1 ? 'facility' : 'facilities'} within ${km}km`;
 
     const mapsSearch = encodeURIComponent(condition.mapsQuery);
     let html = '<div class="hospitals-list">';
@@ -856,7 +873,7 @@ ${stepsText}
 
   function showMapsFallback(lat, lng, condition) {
     const mapsSearch = encodeURIComponent(condition.mapsQuery);
-    document.getElementById('hospitalsSubtitle').textContent = `Search for ${condition.label}`;
+    document.getElementById('hospitalsSubtitle').textContent = `No hospitals within 30km — searching Google Maps`;
     document.getElementById('hospitalsList').innerHTML = `
       <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
         <a href="https://www.google.com/maps/search/${mapsSearch}/@${lat},${lng},13z" target="_blank" class="gmaps-link">🏥 Find ${condition.label} Near Me</a>
@@ -1217,8 +1234,9 @@ ${stepsText}
       pos => {
         btn.textContent = '✅ Location found';
         status.className = 'location-status visible success';
-        status.textContent = '✅ Finding nearby pharmacies...';
+        status.textContent = '✅ Got it!';
         document.getElementById('pharmaciesCard').classList.add('visible');
+        document.getElementById('pharmaciesSubtitle').textContent = 'Searching within 5km...';
         fetchNearbyPharmacies(pos.coords.latitude, pos.coords.longitude);
       },
       err => {
@@ -1233,38 +1251,50 @@ ${stepsText}
   }
 
   async function fetchNearbyPharmacies(lat, lng) {
-    const query = `[out:json][timeout:25];(
-      node["amenity"="pharmacy"](around:5000,${lat},${lng});
-      node["amenity"="chemist"](around:5000,${lat},${lng});
-    );out 10;`;
-    try {
-      const resp = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: 'data=' + encodeURIComponent(query)
-      });
-      const data = await resp.json();
-      const elements = (data.elements || [])
-        .filter(e => e.tags?.name)
-        .map(e => ({
-          name: e.tags['name:en'] || e.tags.name,
-          type: e.tags.amenity || 'pharmacy',
-          dist: haversine(lat, lng, e.lat, e.lon),
-          lat: e.lat, lng: e.lon,
-          phone: e.tags.phone || e.tags['contact:phone'] || e.tags['phone:mobile'] || null
-        }))
-        .filter(f => f.dist <= 5)
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 6);
+    const radii = [5000, 15000, 30000];
 
-      if (elements.length === 0) { showPharmacyFallback(lat, lng); return; }
-      renderPharmacies(elements, lat, lng);
-    } catch(e) {
-      showPharmacyFallback(lat, lng);
+    for (let i = 0; i < radii.length; i++) {
+      const r = radii[i];
+      const km = r / 1000;
+
+      if (i > 0) {
+        document.getElementById('pharmaciesSubtitle').textContent =
+          `No pharmacies within ${radii[i-1]/1000}km — expanding to ${km}km...`;
+      }
+
+      try {
+        const q = `[out:json][timeout:25];(
+          node["amenity"="pharmacy"](around:${r},${lat},${lng});
+          node["amenity"="chemist"](around:${r},${lat},${lng});
+        );out 10;`;
+        const resp = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST', body: 'data=' + encodeURIComponent(q)
+        });
+        const data = await resp.json();
+        const elements = (data.elements || [])
+          .filter(e => e.tags?.name)
+          .map(e => ({
+            name: e.tags['name:en'] || e.tags.name,
+            type: e.tags.amenity || 'pharmacy',
+            dist: haversine(lat, lng, e.lat, e.lon),
+            lat: e.lat, lng: e.lon,
+            phone: e.tags.phone || e.tags['contact:phone'] || e.tags['phone:mobile'] || null
+          }))
+          .filter(f => f.dist <= km)
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, 6);
+
+        if (elements.length > 0) {
+          renderPharmacies(elements, lat, lng, km);
+          return;
+        }
+      } catch(e) { /* try next radius */ }
     }
+    showPharmacyFallback(lat, lng);
   }
 
-  function renderPharmacies(pharmacies, lat, lng) {
-    document.getElementById('pharmaciesSubtitle').textContent = `${pharmacies.length} pharmacies found within 5km`;
+  function renderPharmacies(pharmacies, lat, lng, km) {
+    document.getElementById('pharmaciesSubtitle').textContent = `Found ${pharmacies.length} ${pharmacies.length === 1 ? 'pharmacy' : 'pharmacies'} within ${km}km`;
     let html = '<div class="hospitals-list">';
     pharmacies.forEach(p => {
       const dist = p.dist < 1 ? `${Math.round(p.dist*1000)}m` : `${p.dist.toFixed(1)}km`;
@@ -1291,7 +1321,7 @@ ${stepsText}
   }
 
   function showPharmacyFallback(lat, lng) {
-    document.getElementById('pharmaciesSubtitle').textContent = 'Search on Google Maps';
+    document.getElementById('pharmaciesSubtitle').textContent = 'No pharmacies within 30km — searching Google Maps';
     document.getElementById('pharmaciesList').innerHTML = `
       <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
         <a href="https://www.google.com/maps/search/pharmacy/@${lat},${lng},14z" target="_blank" class="gmaps-link">💊 Find Pharmacies Near Me</a>
