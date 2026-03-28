@@ -161,6 +161,23 @@
   .modal-agree-btn:hover { background: #145530; }
 
   /* Prescription Translator */
+  .rx-tips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .rx-tip { display: flex; align-items: flex-start; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .rx-tip-icon { font-size: 18px; flex-shrink: 0; line-height: 1.3; }
+  .rx-tip-text { font-size: 12px; line-height: 1.4; color: var(--ink); }
+  .rx-tip-text strong { display: block; font-size: 12px; color: var(--ink); margin-bottom: 1px; }
+  .rx-tip-text span { color: var(--ink-muted); }
+  .rx-photo-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .rx-photo-box { border-radius: 10px; overflow: hidden; border: 2px solid var(--border); }
+  .rx-photo-box.good { border-color: var(--green-mid); }
+  .rx-photo-box.bad { border-color: var(--red); }
+  .rx-photo-mock { height: 80px; display: flex; align-items: center; justify-content: center; font-size: 28px; position: relative; }
+  .rx-photo-mock.good-bg { background: linear-gradient(135deg, #f0fff4, #e8f5ee); }
+  .rx-photo-mock.bad-bg { background: linear-gradient(135deg, #fff5f5, #fdecea); }
+  .rx-photo-label { padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-align: center; }
+  .rx-photo-box.good .rx-photo-label { background: var(--green-light); color: var(--green); }
+  .rx-photo-box.bad .rx-photo-label { background: var(--red-light); color: var(--red); }
+  .rx-photo-sub { font-size: 10px; font-weight: 400; display: block; color: inherit; opacity: 0.75; }
   .rx-upload-area { border: 2px dashed var(--border); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg); margin-bottom: 16px; }
   .rx-upload-area:hover, .rx-upload-area.drag { border-color: var(--green-mid); background: var(--green-light); }
   .rx-upload-area input { display: none; }
@@ -346,6 +363,26 @@
       </div>
     </div>
     <div class="card-body">
+      <!-- Photo tips -->
+      <div class="rx-tips">
+        <div class="rx-tip"><div class="rx-tip-icon">☀️</div><div class="rx-tip-text"><strong>Good lighting</strong><span>Near a window or lamp</span></div></div>
+        <div class="rx-tip"><div class="rx-tip-icon">📐</div><div class="rx-tip-text"><strong>Flat surface</strong><span>Place prescription flat</span></div></div>
+        <div class="rx-tip"><div class="rx-tip-icon">🔍</div><div class="rx-tip-text"><strong>Fill the frame</strong><span>Prescription fills most of photo</span></div></div>
+        <div class="rx-tip"><div class="rx-tip-icon">✋</div><div class="rx-tip-text"><strong>Hold steady</strong><span>Tap to focus before shooting</span></div></div>
+      </div>
+
+      <!-- Good vs Bad visual -->
+      <div class="rx-photo-compare">
+        <div class="rx-photo-box good">
+          <div class="rx-photo-mock good-bg">📄</div>
+          <div class="rx-photo-label">✅ Good<br><span class="rx-photo-sub">Clear · Flat · Well-lit</span></div>
+        </div>
+        <div class="rx-photo-box bad">
+          <div class="rx-photo-mock bad-bg" style="transform:rotate(-8deg);font-size:22px;opacity:0.6">📄</div>
+          <div class="rx-photo-label">❌ Avoid<br><span class="rx-photo-sub">Blurry · Angled · Dark</span></div>
+        </div>
+      </div>
+
       <div class="rx-upload-area" id="rxUploadArea" onclick="document.getElementById('rxFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="rxHandleDrop(event)">
         <input type="file" id="rxFileInput" accept="image/*,.pdf" onchange="rxHandleFile(this.files[0])">
         <div class="rx-upload-icon">📷</div>
