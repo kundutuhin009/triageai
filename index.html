@@ -145,6 +145,30 @@
   .gmaps-link { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; margin: 12px 16px 16px; border: 1.5px solid #90caf9; border-radius: 10px; background: var(--blue-light); font-size: 13px; color: var(--blue); text-decoration: none; font-weight: 600; }
   .gmaps-link:hover { background: #bbdefb; }
 
+  /* Disclaimer modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.hidden { display: none; }
+  .modal-box { background: var(--surface); border-radius: 20px; max-width: 480px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 48px rgba(0,0,0,0.3); animation: fadeUp 0.3s ease; }
+  .modal-top { background: #fffbf0; border-bottom: 1px solid #ffe082; padding: 24px 28px 20px; border-radius: 20px 20px 0 0; }
+  .modal-top h2 { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; color: #7a5c00; margin-bottom: 4px; }
+  .modal-top p { font-size: 12px; color: #9a7a00; }
+  .modal-body { padding: 24px 28px; }
+  .modal-body p { font-size: 14px; line-height: 1.7; color: var(--ink); margin-bottom: 16px; font-weight: 300; }
+  .modal-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .modal-list li { font-size: 13px; line-height: 1.5; color: var(--ink); padding: 10px 14px; background: var(--bg); border-radius: 8px; border-left: 3px solid var(--amber); }
+  .modal-note { font-size: 12px; color: var(--ink-muted); line-height: 1.6; padding: 12px 14px; background: var(--green-light); border-radius: 8px; border-left: 3px solid var(--green-mid); margin-bottom: 20px; }
+  .modal-agree-btn { width: 100%; height: 52px; background: var(--green); border: none; border-radius: 10px; color: white; font-size: 16px; font-weight: 700; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: background 0.2s; }
+  .modal-agree-btn:hover { background: #145530; }
+
+  /* Privacy panel */
+  .privacy-panel { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 24px 28px; display: none; margin-bottom: 20px; animation: fadeUp 0.3s ease; }
+  .privacy-panel.visible { display: block; }
+  .privacy-panel h3 { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 400; color: var(--ink); margin-bottom: 16px; }
+  .privacy-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.6; color: var(--ink); }
+  .privacy-item:last-child { border-bottom: none; }
+  .privacy-item-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .privacy-close { margin-top: 16px; font-size: 12px; color: var(--ink-muted); cursor: pointer; text-decoration: underline; background: none; border: none; font-family: 'DM Sans', sans-serif; }
+
   footer { background: var(--ink); padding: 32px 40px; text-align: center; }
   .footer-text { font-family: 'DM Mono', monospace; font-size: 10px; color: #3a3a35; letter-spacing: 2px; text-transform: uppercase; line-height: 2; }
   .footer-text a { color: var(--green-mid); text-decoration: none; }
@@ -160,6 +184,30 @@
 </style>
 </head>
 <body>
+
+<!-- Disclaimer Modal -->
+<div class="modal-overlay" id="disclaimerModal">
+  <div class="modal-box">
+    <div class="modal-top">
+      <h2>⚠️ Important — Please Read</h2>
+      <p>Read before using this tool</p>
+    </div>
+    <div class="modal-body">
+      <p>TriageAI is an educational prototype and AI experiment, <strong>NOT a medical device or service.</strong></p>
+      <ul class="modal-list">
+        <li>This is <strong>NOT</strong> a medical diagnosis</li>
+        <li>This does <strong>NOT</strong> replace a qualified doctor</li>
+        <li>This is a student research prototype</li>
+        <li>Your symptoms are processed by AI and are <strong>not stored or shared</strong></li>
+        <li>Location data is used only to find nearby hospitals and is <strong>never stored</strong></li>
+        <li>For emergencies always call <strong>112</strong></li>
+        <li>The creator accepts no liability for decisions made based on this tool</li>
+      </ul>
+      <div class="modal-note">This tool was built as an educational AI prototype as part of research into Clinical AI validation frameworks.</div>
+      <button class="modal-agree-btn" onclick="acceptDisclaimer()">I Understand — Continue</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="logo">
@@ -306,6 +354,16 @@
     </div>
   </div>
 
+  <!-- Privacy Panel -->
+  <div class="privacy-panel" id="privacyPanel">
+    <h3>🔒 Privacy</h3>
+    <div class="privacy-item"><span class="privacy-item-icon">🩺</span><span><strong>Symptoms</strong> — processed by Claude AI (Anthropic). Never stored, never shared. Each session is independent.</span></div>
+    <div class="privacy-item"><span class="privacy-item-icon">📍</span><span><strong>Location</strong> — used only to find nearby hospitals via OpenStreetMap. Never stored or transmitted to any server.</span></div>
+    <div class="privacy-item"><span class="privacy-item-icon">🚫</span><span><strong>No third-party data sharing</strong> — your data is not sold or shared with advertisers or any third parties.</span></div>
+    <div class="privacy-item"><span class="privacy-item-icon">🗑️</span><span><strong>No data retained</strong> — all personal data is cleared when your session ends. We store nothing about you.</span></div>
+    <button class="privacy-close" onclick="document.getElementById('privacyPanel').classList.remove('visible')">Close</button>
+  </div>
+
 </main>
 
 <footer>
@@ -314,11 +372,25 @@
     <a href="https://www.linkedin.com/in/tuhinkundu" target="_blank">LinkedIn</a> ·
     Prototype for rural healthcare access · Not a medical device<br>
     Emergency: 112<br>
-    Free symptom checker · Rural India · Hindi हिंदी · Bengali বাংলা · Kannada ಕನ್ನಡ · Tamil தமிழ்
+    Free symptom checker · Rural India · Hindi हिंदी · Bengali বাংলা · Kannada ಕನ್ನಡ · Tamil தமிழ்<br>
+    <a href="#" onclick="event.preventDefault();document.getElementById('privacyPanel').classList.add('visible');document.getElementById('privacyPanel').scrollIntoView({behavior:'smooth'})">Privacy</a>
   </div>
 </footer>
 
 <script>
+  // Disclaimer
+  (function() {
+    if (!sessionStorage.getItem('triageai_accepted')) {
+      document.getElementById('disclaimerModal').classList.remove('hidden');
+    } else {
+      document.getElementById('disclaimerModal').classList.add('hidden');
+    }
+  })();
+  function acceptDisclaimer() {
+    sessionStorage.setItem('triageai_accepted', '1');
+    document.getElementById('disclaimerModal').classList.add('hidden');
+  }
+
   let userLat = null, userLng = null;
 
   function addChip(text) {
