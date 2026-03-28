@@ -634,8 +634,9 @@
         status.textContent = '✅ Finding nearby hospitals...';
         document.getElementById('hospitalsCard').classList.add('visible');
         const symptoms = document.getElementById('symptoms').value;
-        const urgency = document.getElementById('urgencyBanner').className.replace('urgency-banner ', '');
-        const condition = classifyCondition(symptoms, urgency);
+        const urgency = document.getElementById('urgencyBanner').className.replace('urgency-banner ', '').trim();
+        const assessment = document.getElementById('assessmentText').textContent;
+        const condition = classifyCondition(symptoms, urgency, assessment);
         fetchNearbyHospitals(pos.coords.latitude, pos.coords.longitude, condition);
       },
       err => {
@@ -747,21 +748,35 @@ ${stepsText}
     document.getElementById('whatsappBtn').href = `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
   }
 
-  function classifyCondition(symptoms, urgency) {
-    const s = symptoms.toLowerCase();
-    if (/chest pain|cardiac|heart|palpitation|angina/.test(s))
-      return { type: 'cardiac', label: 'Cardiac / Chest Pain', mapsQuery: 'cardiac hospital emergency', amenities: ['hospital'], radius: 15000 };
-    if (/pregnan|maternity|labour|labor|gynec|delivery|obstet/.test(s))
-      return { type: 'maternity', label: 'Maternity / Gynecology', mapsQuery: 'maternity hospital gynecologist', amenities: ['hospital', 'clinic'], radius: 15000 };
-    if (/snake|animal bite|dog bite|scorpion|rabies/.test(s))
-      return { type: 'emergency', label: 'Emergency / Animal Bite', mapsQuery: 'government hospital emergency', amenities: ['hospital'], radius: 20000 };
-    if (/diabet|blood sugar|insulin|glucose/.test(s))
-      return { type: 'diabetes', label: 'Diabetic Care', mapsQuery: 'diabetic care clinic doctor', amenities: ['clinic', 'doctors', 'hospital'], radius: 10000 };
-    if (/fever|infection|malaria|dengue|typhoid|cold|flu|cough/.test(s))
-      return { type: 'fever', label: 'General Physician / Clinic', mapsQuery: 'general physician clinic', amenities: ['clinic', 'doctors', 'hospital'], radius: 10000 };
+  function classifyCondition(symptoms, urgency, assessment) {
+    const s = (symptoms + ' ' + (assessment || '')).toLowerCase();
+    const h = (text, radius, type, label, mapsQuery, amenities) =>
+      ({ type, label, mapsQuery, amenities, radius });
+
+    if (/snake|animal.?bite|dog.?bite|scorpion|rabies|antivenom/.test(s))
+      return h(s, 20000, 'emergency', 'Emergency / Animal Bite', 'government hospital emergency antivenom', ['hospital']);
+    if (/chest.?pain|cardiac|palpitation|angina|heart.?attack|myocard/.test(s)
+      || (/breath|dyspnoea|sob/.test(s) && /chest/.test(s)))
+      return h(s, 15000, 'cardiac', 'Cardiac / Chest Pain', 'cardiac hospital emergency', ['hospital']);
+    if (/pregnan|maternity|labour|labor|gynec|delivery|obstet|antenatal/.test(s))
+      return h(s, 15000, 'maternity', 'Maternity / Gynecology', 'maternity hospital gynecologist', ['hospital', 'clinic']);
+    if (/\bchild\b|infant|baby|newborn|toddler|paediatric|pediatric/.test(s))
+      return h(s, 15000, 'pediatric', 'Pediatric / Children\'s Hospital', 'pediatric hospital children', ['hospital', 'clinic']);
+    if (/fracture|broken.?bone|ortho|accident|trauma|disloc/.test(s))
+      return h(s, 15000, 'ortho', 'Orthopedic / Emergency', 'orthopedic hospital emergency', ['hospital']);
+    if (/\beye\b|vision|blind|cornea|ophthal|cataract/.test(s))
+      return h(s, 15000, 'eye', 'Eye Hospital / Ophthalmologist', 'eye hospital ophthalmologist', ['hospital', 'clinic']);
+    if (/diabet|blood.?sugar|insulin|glucose|hyperglycaem|endocrin/.test(s))
+      return h(s, 10000, 'diabetes', 'Diabetic Clinic / Endocrinologist', 'diabetic clinic endocrinologist', ['clinic', 'doctors', 'hospital']);
+    if (/headache|vomit|diarrhea|diarrhoea|nausea|gastro|stomach|abdomen/.test(s))
+      return h(s, 10000, 'general', 'General Physician / Medicine', 'general physician clinic medicine', ['clinic', 'doctors', 'hospital']);
+    if (/fever|infection|malaria|dengue|typhoid|cold|flu|cough|viral/.test(s))
+      return h(s, 10000, 'fever', 'General Physician / Clinic', 'general physician clinic', ['clinic', 'doctors', 'hospital']);
     if (urgency === 'red')
-      return { type: 'emergency', label: 'Emergency Care', mapsQuery: 'hospital emergency', amenities: ['hospital'], radius: 20000 };
-    return { type: 'general', label: 'Clinic / Doctor', mapsQuery: 'clinic doctor', amenities: ['clinic', 'doctors', 'hospital'], radius: 10000 };
+      return h(s, 20000, 'emergency', 'Emergency Care', 'hospital emergency', ['hospital']);
+    if (urgency === 'green')
+      return h(s, 8000, 'general', 'General Physician / Clinic', 'general physician clinic nearby', ['clinic', 'doctors', 'hospital']);
+    return h(s, 10000, 'general', 'Hospital / Clinic', 'general hospital clinic', ['clinic', 'doctors', 'hospital']);
   }
 
   async function fetchNearbyHospitals(lat, lng, condition) {
