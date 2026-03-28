@@ -50,6 +50,13 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
   "follow_up": "Follow-up instructions if any, or blank if none"
 }
 
+IMPORTANT — handling unclear text:
+If you cannot read a word clearly, do NOT skip it. Instead:
+1. Look at the letters you CAN see
+2. Cross-reference with common Indian drug names
+3. Give your best guess and set "unclear": true to flag it with ⚠️ Uncertain
+4. Never return empty fields — always provide a best-effort value
+
 If this image is not a prescription, return: {"error": "Not a prescription"}`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
