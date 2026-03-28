@@ -160,6 +160,36 @@
   .modal-agree-btn { width: 100%; height: 52px; background: var(--green); border: none; border-radius: 10px; color: white; font-size: 16px; font-weight: 700; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: background 0.2s; }
   .modal-agree-btn:hover { background: #145530; }
 
+  /* Prescription Translator */
+  .rx-upload-area { border: 2px dashed var(--border); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg); margin-bottom: 16px; }
+  .rx-upload-area:hover, .rx-upload-area.drag { border-color: var(--green-mid); background: var(--green-light); }
+  .rx-upload-area input { display: none; }
+  .rx-upload-icon { font-size: 36px; margin-bottom: 10px; }
+  .rx-upload-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .rx-upload-sub { font-size: 12px; color: var(--ink-muted); }
+  .rx-preview { display: none; margin-bottom: 16px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .rx-preview img { width: 100%; max-height: 220px; object-fit: contain; background: #f0f0f0; display: block; }
+  .rx-preview-pdf { padding: 14px 16px; background: var(--bg); display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink); }
+  .rx-translate-btn { width: 100%; height: 48px; background: #5c35b5; border: none; border-radius: 10px; color: white; font-size: 15px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
+  .rx-translate-btn:hover:not(:disabled) { background: #4a2a96; transform: translateY(-1px); }
+  .rx-translate-btn:disabled { background: var(--ink-faint); cursor: not-allowed; transform: none; }
+  .rx-result { display: none; margin-top: 20px; }
+  .rx-result.visible { display: block; }
+  .rx-medicine { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .rx-medicine-name { font-size: 17px; font-weight: 700; color: var(--ink); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .rx-rows { display: flex; flex-direction: column; gap: 7px; }
+  .rx-row { display: flex; gap: 10px; font-size: 13px; line-height: 1.5; }
+  .rx-row-icon { flex-shrink: 0; width: 20px; }
+  .rx-row-label { font-weight: 600; color: var(--ink-muted); min-width: 80px; }
+  .rx-row-val { color: var(--ink); }
+  .rx-warning-row .rx-row-val { color: var(--amber); }
+  .rx-notes { background: var(--blue-light); border: 1px solid #90caf9; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: var(--blue); margin-top: 4px; line-height: 1.6; }
+  .rx-disclaimer { font-size: 11px; color: var(--ink-muted); background: #fffbf0; border: 1px solid #ffe082; border-radius: 8px; padding: 10px 12px; margin-top: 12px; line-height: 1.6; }
+  .rx-wa-btn { width: 100%; height: 44px; background: #25D366; border: none; border-radius: 10px; color: white; font-size: 14px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; transition: background 0.2s; }
+  .rx-wa-btn:hover { background: #1ebe5d; }
+  .rx-reset-btn { width: 100%; height: 40px; background: transparent; border: 1.5px solid var(--border); border-radius: 10px; color: var(--ink-muted); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; margin-top: 10px; transition: all 0.2s; }
+  .rx-reset-btn:hover { border-color: var(--ink); color: var(--ink); }
+
   /* Privacy panel */
   .privacy-panel { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 24px 28px; display: none; margin-bottom: 20px; animation: fadeUp 0.3s ease; }
   .privacy-panel.visible { display: block; }
@@ -301,6 +331,44 @@
       </div>
 
       <button class="submit-btn" onclick="assess()">🔍 Assess My Symptoms</button>
+    </div>
+  </div>
+
+  <!-- Prescription Translator -->
+  <div class="card" id="rxCard">
+    <div class="card-header">
+      <div class="card-header-icon" style="background:#ede7f6">📋</div>
+      <div class="card-header-text">
+        <h2>Prescription Translator</h2>
+        <p>Can't read your doctor's handwriting? Upload a photo or PDF</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="rx-upload-area" id="rxUploadArea" onclick="document.getElementById('rxFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="rxHandleDrop(event)">
+        <input type="file" id="rxFileInput" accept="image/*,.pdf" onchange="rxHandleFile(this.files[0])">
+        <div class="rx-upload-icon">📷</div>
+        <div class="rx-upload-title">Tap to upload prescription</div>
+        <div class="rx-upload-sub">Photo (JPG, PNG) or PDF · Max 5MB</div>
+      </div>
+
+      <div class="rx-preview" id="rxPreview">
+        <img id="rxPreviewImg" src="" alt="Prescription preview" style="display:none">
+        <div class="rx-preview-pdf" id="rxPreviewPdf" style="display:none">📄 <span id="rxPdfName"></span></div>
+      </div>
+
+      <button class="rx-translate-btn" id="rxTranslateBtn" onclick="rxTranslate()" disabled>
+        🔍 Read My Prescription
+      </button>
+
+      <div class="rx-result" id="rxResult">
+        <div id="rxMedicineList"></div>
+        <div class="rx-disclaimer">⚠️ Always verify with your pharmacist or doctor before taking any medicine. This is an AI reading — it may contain errors.</div>
+        <a class="rx-wa-btn" id="rxWaBtn" href="#" target="_blank">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Send to Doctor / Family via WhatsApp
+        </a>
+        <button class="rx-reset-btn" onclick="rxReset()">← Translate Another Prescription</button>
+      </div>
     </div>
   </div>
 
@@ -712,6 +780,128 @@ ${stepsText}
       try { recognition.start(); } catch(e) {}
     };
   })();
+
+  // Prescription Translator
+  let rxFile = null;
+
+  function rxHandleFile(file) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert('File too large. Please use an image under 5MB.'); return; }
+    rxFile = file;
+    const preview = document.getElementById('rxPreview');
+    preview.style.display = 'block';
+    document.getElementById('rxUploadArea').style.display = 'none';
+    if (file.type === 'application/pdf') {
+      document.getElementById('rxPreviewImg').style.display = 'none';
+      document.getElementById('rxPreviewPdf').style.display = 'flex';
+      document.getElementById('rxPdfName').textContent = file.name;
+    } else {
+      document.getElementById('rxPreviewPdf').style.display = 'none';
+      const img = document.getElementById('rxPreviewImg');
+      img.style.display = 'block';
+      img.src = URL.createObjectURL(file);
+    }
+    document.getElementById('rxTranslateBtn').disabled = false;
+  }
+
+  function rxHandleDrop(e) {
+    e.preventDefault();
+    document.getElementById('rxUploadArea').classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) rxHandleFile(file);
+  }
+
+  async function rxTranslate() {
+    if (!rxFile) return;
+    const btn = document.getElementById('rxTranslateBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Reading prescription...';
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result.split(',')[1];
+      const mediaType = rxFile.type;
+      try {
+        const resp = await fetch('/api/prescription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: base64, mediaType })
+        });
+        const apiResult = await resp.json();
+        const text = apiResult.content?.map(b => b.text || '').join('') || '';
+        const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+        if (parsed.error) { alert('Could not read prescription: ' + parsed.error); rxResetBtn(); return; }
+        rxShowResult(parsed);
+      } catch(err) {
+        alert('Something went wrong. Please try again.');
+        rxResetBtn();
+      }
+    };
+    reader.readAsDataURL(rxFile);
+  }
+
+  function rxResetBtn() {
+    const btn = document.getElementById('rxTranslateBtn');
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Read My Prescription';
+  }
+
+  function rxShowResult(data) {
+    const medicines = data.medicines || [];
+    let html = '';
+    let waText = '💊 *My Prescription Summary*\n_(via TriageAI Prescription Translator)_\n\n';
+
+    medicines.forEach((m, i) => {
+      html += `<div class="rx-medicine">
+        <div class="rx-medicine-name">💊 ${m.name}</div>
+        <div class="rx-rows">
+          ${m.dosage ? `<div class="rx-row"><span class="rx-row-icon">📏</span><span class="rx-row-label">Dosage</span><span class="rx-row-val">${m.dosage}</span></div>` : ''}
+          ${m.frequency ? `<div class="rx-row"><span class="rx-row-icon">⏰</span><span class="rx-row-label">Frequency</span><span class="rx-row-val">${m.frequency}</span></div>` : ''}
+          ${m.duration ? `<div class="rx-row"><span class="rx-row-icon">📅</span><span class="rx-row-label">Duration</span><span class="rx-row-val">${m.duration}</span></div>` : ''}
+          ${m.purpose ? `<div class="rx-row"><span class="rx-row-icon">🎯</span><span class="rx-row-label">Purpose</span><span class="rx-row-val">${m.purpose}</span></div>` : ''}
+          ${m.warnings ? `<div class="rx-row rx-warning-row"><span class="rx-row-icon">⚠️</span><span class="rx-row-label">Warning</span><span class="rx-row-val">${m.warnings}</span></div>` : ''}
+        </div>
+      </div>`;
+      waText += `*${i+1}. ${m.name}*\n`;
+      if (m.dosage) waText += `📏 Dosage: ${m.dosage}\n`;
+      if (m.frequency) waText += `⏰ Frequency: ${m.frequency}\n`;
+      if (m.duration) waText += `📅 Duration: ${m.duration}\n`;
+      if (m.purpose) waText += `🎯 For: ${m.purpose}\n`;
+      if (m.warnings) waText += `⚠️ Warning: ${m.warnings}\n`;
+      waText += '\n';
+    });
+
+    if (data.doctor_notes) {
+      html += `<div class="rx-notes">📝 <strong>Doctor's notes:</strong> ${data.doctor_notes}</div>`;
+      waText += `📝 *Doctor's notes:* ${data.doctor_notes}\n\n`;
+    }
+    if (data.follow_up) {
+      html += `<div class="rx-notes" style="margin-top:8px">🔁 <strong>Follow-up:</strong> ${data.follow_up}</div>`;
+      waText += `🔁 *Follow-up:* ${data.follow_up}\n\n`;
+    }
+
+    waText += '⚠️ Always verify with your pharmacist before taking any medicine.\nGenerated by TriageAI — triageai-omega.vercel.app';
+
+    document.getElementById('rxMedicineList').innerHTML = html;
+    document.getElementById('rxWaBtn').href = `https://wa.me/?text=${encodeURIComponent(waText)}`;
+    document.getElementById('rxResult').classList.add('visible');
+    const btn = document.getElementById('rxTranslateBtn');
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Read My Prescription';
+    document.getElementById('rxResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function rxReset() {
+    rxFile = null;
+    document.getElementById('rxFileInput').value = '';
+    document.getElementById('rxPreview').style.display = 'none';
+    document.getElementById('rxUploadArea').style.display = 'block';
+    document.getElementById('rxPreviewImg').src = '';
+    document.getElementById('rxResult').classList.remove('visible');
+    document.getElementById('rxMedicineList').innerHTML = '';
+    document.getElementById('rxTranslateBtn').disabled = true;
+    document.getElementById('rxTranslateBtn').innerHTML = '🔍 Read My Prescription';
+  }
 
   function resetAll() {
     document.getElementById('inputCard').style.display = 'block';
