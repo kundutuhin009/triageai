@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TriageAI — Rural Health Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,700;1,300;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f4ef;
+    --surface: #ffffff;
+    --ink: #1a1a18;
+    --ink-muted: #6b6b65;
+    --ink-faint: #b5b3ac;
+    --green: #1a6b3c;
+    --green-light: #e8f5ee;
+    --green-mid: #2d9e5f;
+    --amber: #b85c00;
+    --amber-light: #fff3e0;
+    --red: #c0392b;
+    --red-light: #fdecea;
+    --border: #e8e4dc;
+    --shadow: 0 2px 24px rgba(0,0,0,0.07);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    background: var(--ink);
+    padding: 0 40px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--green-mid);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo-text {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+  }
+
+  .logo-text span {
+    color: var(--green-mid);
+  }
+
+  .header-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #555550;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Hero */
+  .hero {
+    background: var(--ink);
+    padding: 64px 40px 80px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 100%, rgba(45,158,95,0.15), transparent 70%);
+  }
+
+  .hero-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--green-mid);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .hero h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 52px;
+    font-weight: 300;
+    color: #ffffff;
+    line-height: 1.1;
+    letter-spacing: -1px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--green-mid);
+  }
+
+  .hero-sub {
+    font-size: 16px;
+    color: #888880;
+    font-weight: 300;
+    max-width: 480px;
+    margin: 0 auto 40px;
+    line-height: 1.6;
+    position: relative;
+  }
+
+  .disclaimer-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 100px;
+    padding: 8px 20px;
+    font-size: 12px;
+    color: #888880;
+    position: relative;
+  }
+
+  .disclaimer-banner::before {
+    content: '⚠️';
+    font-size: 12px;
+  }
+
+  /* Main */
+  main {
+    flex: 1;
+    max-width: 720px;
+    width: 100%;
+    margin: -32px auto 0;
+    padding: 0 24px 64px;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* Input Card */
+  .input-card {
+    background: var(--surface);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .card-header {
+    padding: 24px 28px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-header-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--green-light);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .card-header-text h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--ink);
+  }
+
+  .card-header-text p {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
+
+  .card-body {
+    padding: 20px 28px 28px;
+  }
+
+  /* Patient Info Row */
+  .patient-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .field-group input,
+  .field-group select {
+    height: 42px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+  }
+
+  .field-group input:focus,
+  .field-group select:focus,
+  textarea:focus {
+    border-color: var(--green-mid);
+  }
+
+  textarea {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    outline: none;
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+
+  textarea::placeholder { color: var(--ink-faint); }
+
+  /* Quick symptoms */
+  .quick-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .quick-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .chip {
+    padding: 6px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 100px;
+    font-size: 12px;
+    color: var(--ink-muted);
+    cursor: pointer;
+    background: var(--bg);
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .chip:hover {
+    border-color: var(--green-mid);
+    color: var(--green);
+    background: var(--green-light);
+  }
+
+  /* Submit */
+  .submit-btn {
+    width: 100%;
+    height: 52px;
+    background: var(--green);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    letter-spacing: 0.2px;
+  }
+
+  .submit-btn:hover:not(:disabled) {
+    background: #145530;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(26,107,60,0.3);
+  }
+
+  .submit-btn:disabled {
+    background: var(--ink-faint);
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Loading */
+  .loading-card {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 48px;
+    text-align: center;
+    display: none;
+  }
+
+  .loading-card.visible { display: block; }
+
+  .pulse-ring {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 3px solid var(--green-light);
+    border-top-color: var(--green-mid);
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    color: var(--ink);
+    font-weight: 300;
+  }
+
+  .loading-sub {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-top: 8px;
+  }
+
+  /* Result Card */
+  .result-card {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: none;
+    animation: fadeUp 0.4s ease;
+  }
+
+  .result-card.visible { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .urgency-banner {
+    padding: 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .urgency-banner.green { background: var(--green-light); border-bottom: 1px solid #c8e6d4; }
+  .urgency-banner.amber { background: var(--amber-light); border-bottom: 1px solid #ffe0b2; }
+  .urgency-banner.red { background: var(--red-light); border-bottom: 1px solid #ffcdd2; }
+
+  .urgency-emoji { font-size: 36px; }
+
+  .urgency-text h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .urgency-banner.green .urgency-text h3 { color: var(--green); }
+  .urgency-banner.amber .urgency-text h3 { color: var(--amber); }
+  .urgency-banner.red .urgency-text h3 { color: var(--red); }
+
+  .urgency-text p {
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .urgency-banner.green .urgency-text p { color: #2d6b4a; }
+  .urgency-banner.amber .urgency-text p { color: #7a4000; }
+  .urgency-banner.red .urgency-text p { color: #8b1a12; }
+
+  .result-body { padding: 28px; }
+
+  .result-section {
+    margin-bottom: 24px;
+  }
+
+  .result-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .result-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .result-text {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--ink);
+    font-weight: 300;
+  }
+
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--green-mid);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .step-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  /* Warning box */
+  .warning-box {
+    background: #fffbf0;
+    border: 1px solid #ffe082;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 12px;
+    color: #7a5c00;
+    line-height: 1.6;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-top: 20px;
+  }
+
+  /* Reset */
+  .reset-btn {
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    color: var(--ink-muted);
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: all 0.2s;
+  }
+
+  .reset-btn:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  /* Footer */
+  footer {
+    background: var(--ink);
+    padding: 32px 40px;
+    text-align: center;
+  }
+
+  .footer-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #3a3a35;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 2;
+  }
+
+  .footer-text a {
+    color: var(--green-mid);
+    text-decoration: none;
+  }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    header { padding: 0 20px; }
+    .hero { padding: 48px 20px 64px; }
+    .hero h1 { font-size: 36px; }
+    main { padding: 0 16px 48px; }
+    .card-body { padding: 16px 20px 20px; }
+    .patient-row { grid-template-columns: 1fr; }
+    .card-header { padding: 20px 20px 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🩺</div>
+    <div class="logo-text">Triage<span>AI</span></div>
+  </div>
+  <div class="header-tag">Rural Health · India</div>
+</header>
+
+<div class="hero">
+  <div class="hero-eyebrow">AI-Powered · Free · No Signup</div>
+  <h1>Know when to see<br><em>a doctor.</em></h1>
+  <p class="hero-sub">Describe your symptoms in plain English or Hindi. Get instant triage guidance — designed for rural India where hospital access is limited.</p>
+  <div class="disclaimer-banner">Not a diagnosis. Always consult a real doctor for medical decisions.</div>
+</div>
+
+<main>
+
+  <!-- Input Card -->
+  <div class="input-card" id="inputCard">
+    <div class="card-header">
+      <div class="card-header-icon">📋</div>
+      <div class="card-header-text">
+        <h2>Describe your symptoms</h2>
+        <p>Be as specific as you can — duration, severity, location</p>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="patient-row">
+        <div class="field-group">
+          <label>Age</label>
+          <input type="number" id="age" placeholder="e.g. 35" min="0" max="120">
+        </div>
+        <div class="field-group">
+          <label>Gender</label>
+          <select id="gender">
+            <option value="">Select</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <textarea id="symptoms" placeholder="e.g. I have had a high fever for 3 days, body pain, and headache. No vomiting but feeling very weak. I live in a rural area and the nearest hospital is 2 hours away..."></textarea>
+
+      <span class="quick-label">Common symptoms — tap to add</span>
+      <div class="quick-chips">
+        <div class="chip" onclick="addChip('Fever')">🌡️ Fever</div>
+        <div class="chip" onclick="addChip('Chest pain')">💔 Chest pain</div>
+        <div class="chip" onclick="addChip('Difficulty breathing')">😮‍💨 Breathing difficulty</div>
+        <div class="chip" onclick="addChip('Severe headache')">🤕 Severe headache</div>
+        <div class="chip" onclick="addChip('Vomiting and diarrhea')">🤢 Vomiting</div>
+        <div class="chip" onclick="addChip('High blood sugar symptoms')">🩸 High blood sugar</div>
+        <div class="chip" onclick="addChip('Snake or animal bite')">🐍 Animal bite</div>
+        <div class="chip" onclick="addChip('Pregnancy related concern')">🤰 Pregnancy concern</div>
+      </div>
+
+      <button class="submit-btn" id="submitBtn" onclick="assess()">
+        <span>🔍</span> Assess My Symptoms
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-card" id="loadingCard">
+    <div class="pulse-ring"></div>
+    <div class="loading-text">Assessing your symptoms...</div>
+    <div class="loading-sub">Our AI triage assistant is reviewing your case</div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <div class="urgency-banner" id="urgencyBanner">
+      <div class="urgency-emoji" id="urgencyEmoji"></div>
+      <div class="urgency-text">
+        <h3 id="urgencyTitle"></h3>
+        <p id="urgencySubtitle"></p>
+      </div>
+    </div>
+    <div class="result-body">
+      <div class="result-section">
+        <div class="result-section-title">Assessment</div>
+        <div class="result-text" id="assessmentText"></div>
+      </div>
+      <div class="result-section">
+        <div class="result-section-title">Recommended Steps</div>
+        <div class="steps-list" id="stepsList"></div>
+      </div>
+      <div class="warning-box">
+        ⚠️ This is an AI triage tool, not a medical diagnosis. It cannot replace a qualified doctor. If in doubt, always seek medical attention. For emergencies, call 112.
+      </div>
+      <button class="reset-btn" onclick="reset()">← Check Different Symptoms</button>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-text">
+    Built by Tuhin Kundu · Clinical AI Validation Series<br>
+    <a href="https://www.linkedin.com/in/tuhinkundu" target="_blank">LinkedIn</a> · 
+    A prototype demonstrating AI triage for rural healthcare access<br>
+    Not a medical device · For educational purposes only
+  </div>
+</footer>
+
+<script>
+  function addChip(text) {
+    const ta = document.getElementById('symptoms');
+    ta.value = ta.value ? ta.value + ', ' + text : text;
+    ta.focus();
+  }
+
+  async function assess() {
+    const symptoms = document.getElementById('symptoms').value.trim();
+    const age = document.getElementById('age').value;
+    const gender = document.getElementById('gender').value;
+
+    if (!symptoms) {
+      alert('Please describe your symptoms first.');
+      return;
+    }
+
+    // Show loading
+    document.getElementById('inputCard').style.display = 'none';
+    document.getElementById('loadingCard').classList.add('visible');
+    document.getElementById('resultCard').classList.remove('visible');
+
+    const patientContext = age || gender
+      ? `Patient: ${age ? age + ' years old' : 'unknown age'}, ${gender || 'unknown gender'}.`
+      : '';
+
+    const prompt = `You are a compassionate medical triage assistant specifically designed for rural India where hospital access is limited and patients may need to travel 2+ hours to reach care.
+
+Your ONLY job is to assess urgency — NOT to diagnose.
+
+${patientContext}
+Symptoms reported: ${symptoms}
+
+Respond in this EXACT JSON format (no markdown, no extra text):
+{
+  "urgency": "green" | "amber" | "red",
+  "urgency_title": "short title like 'Monitor at Home' or 'See a Doctor This Week' or 'Seek Help Today'",
+  "urgency_subtitle": "one sentence explaining the urgency level",
+  "assessment": "2-3 sentences explaining what these symptoms might indicate in simple non-medical language. Do not diagnose. Mention if symptoms are commonly seen in rural India.",
+  "steps": ["step 1", "step 2", "step 3", "step 4"],
+  "red_flags": "one sentence: what symptoms would make this more urgent"
+}
+
+Rules:
+- green = safe to monitor at home for 24-48 hours with basic care
+- amber = should see a doctor within 2-3 days, not immediately life-threatening  
+- red = needs medical attention today, potentially life-threatening
+- Always err on the side of caution for chest pain, breathing difficulty, high fever in children, snake bites, pregnancy complications, signs of stroke
+- Steps must be practical for rural India — home remedies, ORS, when to travel, etc.
+- Never use complex medical jargon
+- Be warm and reassuring in tone`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data.content?.map(b => b.text || '').join('') || '';
+      
+      let result;
+      try {
+        const clean = text.replace(/```json|```/g, '').trim();
+        result = JSON.parse(clean);
+      } catch(e) {
+        throw new Error('Could not parse response');
+      }
+
+      showResult(result);
+
+    } catch (err) {
+      document.getElementById('inputCard').style.display = 'block';
+      document.getElementById('loadingCard').classList.remove('visible');
+      alert('Something went wrong. Please try again.');
+    }
+  }
+
+  function showResult(r) {
+    document.getElementById('loadingCard').classList.remove('visible');
+
+    // Urgency banner
+    const banner = document.getElementById('urgencyBanner');
+    banner.className = 'urgency-banner ' + r.urgency;
+
+    const emojis = { green: '🟢', amber: '🟡', red: '🔴' };
+    document.getElementById('urgencyEmoji').textContent = emojis[r.urgency] || '⚪';
+    document.getElementById('urgencyTitle').textContent = r.urgency_title || '';
+    document.getElementById('urgencySubtitle').textContent = r.urgency_subtitle || '';
+
+    // Assessment
+    document.getElementById('assessmentText').textContent = r.assessment || '';
+
+    // Steps
+    const stepsList = document.getElementById('stepsList');
+    stepsList.innerHTML = '';
+    const steps = r.steps || [];
+    steps.forEach((step, i) => {
+      stepsList.innerHTML += `
+        <div class="step-item">
+          <div class="step-num">${i + 1}</div>
+          <div class="step-text">${step}</div>
+        </div>`;
+    });
+
+    // Add red flags as extra step if red
+    if (r.red_flags) {
+      stepsList.innerHTML += `
+        <div class="step-item" style="border-color: #ffcdd2; background: #fdecea;">
+          <div class="step-num" style="background: var(--red);">⚠</div>
+          <div class="step-text" style="color: var(--red);">${r.red_flags}</div>
+        </div>`;
+    }
+
+    document.getElementById('resultCard').classList.add('visible');
+  }
+
+  function reset() {
+    document.getElementById('inputCard').style.display = 'block';
+    document.getElementById('resultCard').classList.remove('visible');
+    document.getElementById('symptoms').value = '';
+    document.getElementById('age').value = '';
+    document.getElementById('gender').value = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>
