@@ -882,8 +882,21 @@ ${stepsText}
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const base64 = e.target.result.split(',')[1];
-      const mediaType = rxFile.type;
+      let base64, mediaType;
+      // Preprocess images; send PDFs as-is
+      if (rxFile.type === 'application/pdf') {
+        base64 = e.target.result.split(',')[1];
+        mediaType = 'application/pdf';
+      } else {
+        btn.textContent = '🔧 Enhancing image...';
+        try {
+          base64 = await preprocessImage(e.target.result);
+        } catch(_) {
+          base64 = e.target.result.split(',')[1];
+        }
+        mediaType = 'image/jpeg';
+        btn.textContent = '⏳ Reading prescription...';
+      }
       try {
         const resp = await fetch('/api/prescription', {
           method: 'POST',
@@ -901,6 +914,71 @@ ${stepsText}
       }
     };
     reader.readAsDataURL(rxFile);
+  }
+
+  function preprocessImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // 1. Resize to max 1024px width
+        const MAX_W = 1024;
+        const scale = img.width > MAX_W ? MAX_W / img.width : 1;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+
+        // 2. Get pixel data
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const d = imageData.data;
+
+        // 3. Grayscale + contrast (+30%)
+        const contrastFactor = (259 * (77 + 255)) / (255 * (259 - 77)); // ~30% contrast
+        for (let i = 0; i < d.length; i += 4) {
+          // Grayscale (luminosity method)
+          const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+          // Contrast
+          const c = Math.min(255, Math.max(0, Math.round(contrastFactor * (gray - 128) + 128)));
+          d[i] = d[i+1] = d[i+2] = c;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        // 4. Sharpen via convolution kernel on a second canvas
+        const sharpened = document.createElement('canvas');
+        sharpened.width = w;
+        sharpened.height = h;
+        const sCtx = sharpened.getContext('2d');
+        sCtx.drawImage(canvas, 0, 0);
+        const src = sCtx.getImageData(0, 0, w, h);
+        const dst = sCtx.createImageData(w, h);
+        const s = src.data, o = dst.data;
+        // Sharpening kernel: [0,-1,0,-1,5,-1,0,-1,0]
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const px = (y * w + x) * 4;
+            const t  = ((y-1) * w + x) * 4;
+            const b  = ((y+1) * w + x) * 4;
+            const l  = (y * w + (x-1)) * 4;
+            const r  = (y * w + (x+1)) * 4;
+            for (let c = 0; c < 3; c++) {
+              o[px+c] = Math.min(255, Math.max(0, 5*s[px+c] - s[t+c] - s[b+c] - s[l+c] - s[r+c]));
+            }
+            o[px+3] = 255;
+          }
+        }
+        sCtx.putImageData(dst, 0, 0);
+
+        // Return as base64 JPEG (quality 0.92)
+        const result = sharpened.toDataURL('image/jpeg', 0.92).split(',')[1];
+        resolve(result);
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
   }
 
   function rxResetBtn() {
