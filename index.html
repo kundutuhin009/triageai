@@ -349,6 +349,18 @@
     </div>
   </div>
 
+  <!-- Hospital Location Section (shown after assessment) -->
+  <div id="hospitalLocationSection" style="display:none;margin-bottom:20px">
+    <div class="rx-location-section">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--ink)">🏥 Find nearest hospital</div>
+        <div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Share your location to see nearby hospitals and clinics</div>
+      </div>
+      <button class="location-btn" id="hospitalLocationBtn" onclick="getHospitalLocation()">📍 Share Location</button>
+    </div>
+    <div class="location-status" id="hospitalLocationStatus"></div>
+  </div>
+
   <!-- Nearby Hospitals -->
   <div class="hospitals-card" id="hospitalsCard">
     <div class="hospitals-header">
@@ -423,18 +435,6 @@
         <div class="chip" onclick="addChip('High blood sugar symptoms')">🩸 Blood sugar</div>
         <div class="chip" onclick="addChip('Snake or animal bite')">🐍 Animal bite</div>
         <div class="chip" onclick="addChip('Pregnancy related concern')">🤰 Pregnancy</div>
-      </div>
-
-      <!-- Location -->
-      <div class="location-section">
-        <div class="location-header">
-          <div>
-            <div style="font-size:13px;font-weight:600;color:var(--ink)">📍 Find nearest hospital</div>
-            <div style="font-size:11px;color:var(--ink-muted);margin-top:3px">Optional — share location to see nearby care after assessment</div>
-          </div>
-          <button class="location-btn" id="locationBtn" onclick="getLocation()">📍 Share Location</button>
-        </div>
-        <div class="location-status" id="locationStatus"></div>
       </div>
 
       <button class="submit-btn" onclick="assess()">🔍 Assess My Symptoms</button>
@@ -613,45 +613,40 @@
     document.getElementById('disclaimerModal').classList.add('hidden');
   }
 
-  let userLat = null, userLng = null;
-
   function addChip(text) {
     const ta = document.getElementById('symptoms');
     ta.value = ta.value ? ta.value + ', ' + text : text;
     ta.focus();
   }
 
-  function getLocation() {
-    if (!navigator.geolocation) {
-      setLocationStatus('error', '❌ Geolocation not supported');
-      return;
-    }
-    const btn = document.getElementById('locationBtn');
+  function getHospitalLocation() {
+    if (!navigator.geolocation) return;
+    const btn = document.getElementById('hospitalLocationBtn');
+    const status = document.getElementById('hospitalLocationStatus');
     btn.disabled = true;
     btn.textContent = '⏳ Locating...';
-    setLocationStatus('', '📡 Requesting location...');
-
+    status.className = 'location-status visible';
+    status.textContent = '📡 Requesting location...';
     navigator.geolocation.getCurrentPosition(
       pos => {
-        userLat = pos.coords.latitude;
-        userLng = pos.coords.longitude;
         btn.textContent = '✅ Location found';
-        setLocationStatus('success', '✅ Got it! Hospitals will appear after your assessment.');
+        status.className = 'location-status visible success';
+        status.textContent = '✅ Finding nearby hospitals...';
+        document.getElementById('hospitalsCard').classList.add('visible');
+        const symptoms = document.getElementById('symptoms').value;
+        const urgency = document.getElementById('urgencyBanner').className.replace('urgency-banner ', '');
+        const condition = classifyCondition(symptoms, urgency);
+        fetchNearbyHospitals(pos.coords.latitude, pos.coords.longitude, condition);
       },
       err => {
         btn.disabled = false;
         btn.textContent = '📍 Try Again';
         const msgs = { 1: '❌ Permission denied', 2: '❌ Location unavailable', 3: '❌ Timed out' };
-        setLocationStatus('error', msgs[err.code] || '❌ Could not get location');
+        status.className = 'location-status visible error';
+        status.textContent = msgs[err.code] || '❌ Could not get location';
       },
       { timeout: 10000, maximumAge: 60000 }
     );
-  }
-
-  function setLocationStatus(type, msg) {
-    const el = document.getElementById('locationStatus');
-    el.textContent = msg;
-    el.className = 'location-status visible ' + type;
   }
 
   async function assess() {
@@ -701,12 +696,6 @@ Steps must be practical for rural India. Warm tone.`
       document.getElementById('loadingCard').classList.remove('visible');
       showResult(result);
 
-      if (userLat && userLng) {
-        document.getElementById('hospitalsCard').classList.add('visible');
-        const condition = classifyCondition(symptoms, result.urgency);
-        fetchNearbyHospitals(userLat, userLng, condition);
-      }
-
     } catch(err) {
       document.getElementById('inputCard').style.display = 'block';
       document.getElementById('loadingCard').classList.remove('visible');
@@ -732,6 +721,7 @@ Steps must be practical for rural India. Warm tone.`
     }
 
     document.getElementById('resultCard').classList.add('visible');
+    document.getElementById('hospitalLocationSection').style.display = 'block';
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const symptoms = document.getElementById('symptoms').value.trim();
@@ -1298,6 +1288,10 @@ ${stepsText}
     document.getElementById('inputCard').style.display = 'block';
     document.getElementById('resultCard').classList.remove('visible');
     document.getElementById('hospitalsCard').classList.remove('visible');
+    document.getElementById('hospitalLocationSection').style.display = 'none';
+    document.getElementById('hospitalLocationBtn').disabled = false;
+    document.getElementById('hospitalLocationBtn').textContent = '📍 Share Location';
+    document.getElementById('hospitalLocationStatus').className = 'location-status';
     document.getElementById('symptoms').value = '';
     document.getElementById('age').value = '';
     document.getElementById('gender').value = '';
