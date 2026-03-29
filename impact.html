@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TriageAI — Impact</title>
+<meta name="description" content="See how TriageAI is helping people across rural India access the right care.">
+<link rel="canonical" href="https://triageai-omega.vercel.app/impact">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,700;1,300;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #111110; --surface: #1a1a18; --surface2: #222220;
+    --ink: #f0ede8; --ink-muted: #888880; --ink-faint: #3a3a35;
+    --green: #2d9e5f; --green-dim: rgba(45,158,95,0.15);
+    --amber: #e07b00; --amber-dim: rgba(224,123,0,0.15);
+    --red: #e05050; --red-dim: rgba(224,80,80,0.15);
+    --border: #2a2a28;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: 'DM Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--surface); padding: 0 40px; height: 64px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+  .logo-icon { width: 32px; height: 32px; background: var(--green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .logo-text { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; color: var(--ink); }
+  .logo-text span { color: var(--green); }
+  .back-btn { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ink-muted); text-decoration: none; letter-spacing: 1px; text-transform: uppercase; transition: color 0.2s; }
+  .back-btn:hover { color: var(--ink); }
+  .hero { padding: 64px 40px 56px; text-align: center; position: relative; overflow: hidden; border-bottom: 1px solid var(--border); }
+  .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 100%, rgba(45,158,95,0.08), transparent 70%); pointer-events: none; }
+  .hero-eyebrow { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 3px; color: var(--green); text-transform: uppercase; margin-bottom: 20px; }
+  .hero h1 { font-family: 'Fraunces', serif; font-size: 48px; font-weight: 300; color: var(--ink); line-height: 1.1; letter-spacing: -1px; margin-bottom: 16px; }
+  .hero h1 em { font-style: italic; color: var(--green); }
+  .hero-sub { font-size: 15px; color: var(--ink-muted); font-weight: 300; max-width: 440px; margin: 0 auto; line-height: 1.6; }
+  main { flex: 1; max-width: 720px; width: 100%; margin: 0 auto; padding: 48px 24px 80px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 40px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; text-align: center; }
+  .stat-num { font-family: 'Fraunces', serif; font-size: 44px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
+  .stat-num.green { color: var(--green); }
+  .stat-num.amber { color: var(--amber); }
+  .stat-num.blue { color: #4a9eff; }
+  .stat-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); text-transform: uppercase; line-height: 1.4; }
+  .section-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 3px; color: var(--ink-muted); text-transform: uppercase; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .urgency-cards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 40px; }
+  .urgency-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; display: flex; align-items: center; gap: 20px; }
+  .urgency-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .urgency-dot.green { background: var(--green); }
+  .urgency-dot.amber { background: var(--amber); }
+  .urgency-dot.red { background: var(--red); }
+  .urgency-info { flex: 1; }
+  .urgency-name { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+  .urgency-sub { font-size: 12px; color: var(--ink-muted); }
+  .urgency-bar-wrap { flex: 2; }
+  .urgency-bar-track { height: 6px; background: var(--surface2); border-radius: 100px; overflow: hidden; margin-bottom: 6px; }
+  .urgency-bar-fill { height: 100%; border-radius: 100px; transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1); width: 0%; }
+  .urgency-bar-fill.green { background: var(--green); }
+  .urgency-bar-fill.amber { background: var(--amber); }
+  .urgency-bar-fill.red { background: var(--red); }
+  .urgency-bar-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink-muted); display: flex; justify-content: space-between; }
+  .responses-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 40px; }
+  .response-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
+  .response-emoji { font-size: 24px; flex-shrink: 0; }
+  .response-info { flex: 1; min-width: 0; }
+  .response-label { font-size: 13px; color: var(--ink); font-weight: 500; margin-bottom: 2px; }
+  .response-count { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--ink-muted); }
+  .disclaimer { text-align: center; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink-faint); letter-spacing: 1.5px; text-transform: uppercase; line-height: 2; padding-top: 24px; border-top: 1px solid var(--border); }
+  .loading-pulse { display: flex; gap: 6px; justify-content: center; align-items: center; padding: 48px 0; }
+  .loading-pulse span { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.2s ease-in-out infinite; }
+  .loading-pulse span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-pulse span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
+  footer { background: var(--surface); padding: 28px 40px; text-align: center; border-top: 1px solid var(--border); }
+  .footer-text { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink-faint); letter-spacing: 2px; text-transform: uppercase; line-height: 2; }
+  .footer-text a { color: var(--green); text-decoration: none; }
+  @media (max-width: 600px) {
+    header { padding: 0 20px; }
+    .hero { padding: 48px 20px 40px; }
+    .hero h1 { font-size: 36px; }
+    main { padding: 32px 16px 64px; }
+    .stats-grid { grid-template-columns: 1fr; gap: 12px; }
+    .stat-num { font-size: 36px; }
+    .responses-grid { grid-template-columns: 1fr; }
+    .urgency-card { flex-wrap: wrap; }
+    .urgency-bar-wrap { flex: 1 0 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/" class="logo">
+    <div class="logo-icon">🩺</div>
+    <div class="logo-text">Triage<span>AI</span></div>
+  </a>
+  <a href="/" class="back-btn">← Back to App</a>
+</header>
+
+<div class="hero">
+  <div class="hero-eyebrow">Real-world impact</div>
+  <h1>Helping people find<br><em>the right care</em></h1>
+  <p class="hero-sub">Anonymous data from people who used TriageAI to decide what to do about their health.</p>
+</div>
+
+<main id="main">
+  <div class="loading-pulse"><span></span><span></span><span></span></div>
+</main>
+
+<footer>
+  <div class="footer-text">
+    All data is anonymous — no personal info is stored<br>
+    <a href="/">triageai-omega.vercel.app</a>
+  </div>
+</footer>
+
+<script>
+  const URGENCY_META = {
+    green:  { label: 'Monitor at Home',     sub: 'Low urgency',    cls: 'green' },
+    amber:  { label: 'See a Doctor Soon',   sub: 'Medium urgency', cls: 'amber' },
+    red:    { label: 'Seek Help Today',     sub: 'High urgency',   cls: 'red'   },
+  };
+
+  const RESPONSE_META = {
+    helpful:   { emoji: '👍', label: 'Found the right care',  helpful: true  },
+    hospital:  { emoji: '🏥', label: 'Went to hospital/clinic', helpful: true },
+    home:      { emoji: '🏠', label: 'Staying home to recover', helpful: true },
+    unhelpful: { emoji: '👎', label: 'Guidance wasn\'t helpful', helpful: false },
+  };
+
+  async function loadImpact() {
+    const main = document.getElementById('main');
+    try {
+      const resp = await fetch('/api/impact');
+      const d = await resp.json();
+
+      const helpRate = d.helpfulRate || 0;
+      const byU = d.byUrgency || {};
+      const responseBreakdown = {};
+
+      // We don't have per-response breakdown from the API directly,
+      // but we can compute totals from byUrgency
+      // For a richer view, re-fetch keys from the API or extend the endpoint.
+      // For now show what we have cleanly.
+
+      main.innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num blue">${fmt(d.assessments)}</div>
+            <div class="stat-label">Total<br>Assessments</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num amber">${fmt(d.feedback)}</div>
+            <div class="stat-label">Feedback<br>Received</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num green">${helpRate}%</div>
+            <div class="stat-label">Helpfulness<br>Rate</div>
+          </div>
+        </div>
+
+        ${Object.keys(byU).length > 0 ? `
+        <div class="section-title">Breakdown by urgency level</div>
+        <div class="urgency-cards">
+          ${['green','amber','red'].filter(u => byU[u]).map(u => {
+            const meta = URGENCY_META[u] || { label: u, sub: '', cls: u };
+            const data = byU[u];
+            const rate = data.total > 0 ? Math.round((data.helpful / data.total) * 100) : 0;
+            return `<div class="urgency-card">
+              <div class="urgency-dot ${meta.cls}"></div>
+              <div class="urgency-info">
+                <div class="urgency-name">${meta.label}</div>
+                <div class="urgency-sub">${fmt(data.total)} responses</div>
+              </div>
+              <div class="urgency-bar-wrap">
+                <div class="urgency-bar-track">
+                  <div class="urgency-bar-fill ${meta.cls}" data-width="${rate}" style="width:0%"></div>
+                </div>
+                <div class="urgency-bar-label"><span>Helpfulness</span><span>${rate}%</span></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        ` : ''}
+
+        <div class="section-title">Feedback responses</div>
+        <div class="responses-grid">
+          ${Object.entries(RESPONSE_META).map(([key, meta]) => `
+            <div class="response-card">
+              <div class="response-emoji">${meta.emoji}</div>
+              <div class="response-info">
+                <div class="response-label">${meta.label}</div>
+                <div class="response-count" id="resp-${key}">—</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="disclaimer">
+          Data refreshes on each page load · Anonymous only · No health data stored
+        </div>
+      `;
+
+      // Animate bars
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.urgency-bar-fill[data-width]').forEach(el => {
+          el.style.width = el.dataset.width + '%';
+        });
+      });
+
+      // Populate per-response counts from byResponse
+      if (d.byResponse) {
+        Object.entries(d.byResponse).forEach(([key, count]) => {
+          const el = document.getElementById(`resp-${key}`);
+          if (el) el.textContent = fmt(count) + ' response' + (count !== 1 ? 's' : '');
+        });
+      }
+
+    } catch(e) {
+      main.innerHTML = `<p style="text-align:center;color:var(--ink-muted);padding:48px 0;font-size:14px;">Could not load impact data.</p>`;
+    }
+  }
+
+  function fmt(n) {
+    if (!n) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
+  loadImpact();
+</script>
+</body>
+</html>
