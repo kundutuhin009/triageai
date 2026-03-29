@@ -141,70 +141,60 @@
     }
   }
 
+  function urgencyCardsHtml(byU) {
+    if (Object.keys(byU).length === 0) return '';
+    var cards = ['green', 'amber', 'red'].filter(function(u) { return byU[u]; }).map(function(u) {
+      var meta = URGENCY_META[u] || { label: u, sub: '', cls: u };
+      var data = byU[u];
+      var rate = data.total > 0 ? Math.round((data.helpful / data.total) * 100) : 0;
+      return '<div class="urgency-card">'
+        + '<div class="urgency-dot ' + meta.cls + '"></div>'
+        + '<div class="urgency-info">'
+        + '<div class="urgency-name">' + meta.label + '</div>'
+        + '<div class="urgency-sub">' + fmt(data.total) + ' responses</div>'
+        + '</div>'
+        + '<div class="urgency-bar-wrap">'
+        + '<div class="urgency-bar-track">'
+        + '<div class="urgency-bar-fill ' + meta.cls + '" data-width="' + rate + '" style="width:0%"></div>'
+        + '</div>'
+        + '<div class="urgency-bar-label"><span>Helpfulness</span><span>' + rate + '%</span></div>'
+        + '</div>'
+        + '</div>';
+    });
+    return '<div class="section-title">Breakdown by urgency level</div>'
+      + '<div class="urgency-cards">' + cards.join('') + '</div>';
+  }
+
+  function responseCardsHtml(byResponse) {
+    return Object.entries(RESPONSE_META).map(function(entry) {
+      var key = entry[0]; var meta = entry[1];
+      var count = (byResponse || {})[key] || 0;
+      return '<div class="response-card">'
+        + '<div class="response-emoji">' + meta.emoji + '</div>'
+        + '<div class="response-info">'
+        + '<div class="response-label">' + meta.label + '</div>'
+        + '<div class="response-count">' + fmt(count) + ' responses</div>'
+        + '</div></div>';
+    }).join('');
+  }
+
   function renderStats(main, d) {
-    const helpRate = d.helpfulRate || 0;
-    const byU = d.byUrgency || {};
+    var helpRate = d.helpfulRate || 0;
+    var byU = d.byUrgency || {};
 
-    main.innerHTML = `
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-num blue">${fmt(d.assessments)}</div>
-          <div class="stat-label">Total<br>Assessments</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num amber">${fmt(d.feedback)}</div>
-          <div class="stat-label">Feedback<br>Received</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num green">${helpRate}%</div>
-          <div class="stat-label">Helpfulness<br>Rate</div>
-        </div>
-      </div>
+    main.innerHTML =
+      '<div class="stats-grid">'
+      + '<div class="stat-card"><div class="stat-num blue">' + fmt(d.assessments) + '</div><div class="stat-label">Total<br>Assessments</div></div>'
+      + '<div class="stat-card"><div class="stat-num amber">' + fmt(d.feedback) + '</div><div class="stat-label">Feedback<br>Received</div></div>'
+      + '<div class="stat-card"><div class="stat-num green">' + helpRate + '%</div><div class="stat-label">Helpfulness<br>Rate</div></div>'
+      + '</div>'
+      + urgencyCardsHtml(byU)
+      + '<div class="section-title">Feedback responses</div>'
+      + '<div class="responses-grid">' + responseCardsHtml(d.byResponse) + '</div>'
+      + '<div class="disclaimer">Data refreshes on each page load · Anonymous only · No health data stored</div>';
 
-      ${Object.keys(byU).length > 0 ? `
-      <div class="section-title">Breakdown by urgency level</div>
-      <div class="urgency-cards">
-        ${['green','amber','red'].filter(u => byU[u]).map(u => {
-          const meta = URGENCY_META[u] || { label: u, sub: '', cls: u };
-          const data = byU[u];
-          const rate = data.total > 0 ? Math.round((data.helpful / data.total) * 100) : 0;
-          return \`<div class="urgency-card">
-            <div class="urgency-dot \${meta.cls}"></div>
-            <div class="urgency-info">
-              <div class="urgency-name">\${meta.label}</div>
-              <div class="urgency-sub">\${fmt(data.total)} responses</div>
-            </div>
-            <div class="urgency-bar-wrap">
-              <div class="urgency-bar-track">
-                <div class="urgency-bar-fill \${meta.cls}" data-width="\${rate}" style="width:0%"></div>
-              </div>
-              <div class="urgency-bar-label"><span>Helpfulness</span><span>\${rate}%</span></div>
-            </div>
-          </div>\`;
-        }).join('')}
-      </div>
-      ` : ''}
-
-      <div class="section-title">Feedback responses</div>
-      <div class="responses-grid">
-        ${Object.entries(RESPONSE_META).map(([key, meta]) => `
-          <div class="response-card">
-            <div class="response-emoji">${meta.emoji}</div>
-            <div class="response-info">
-              <div class="response-label">${meta.label}</div>
-              <div class="response-count">${fmt((d.byResponse || {})[key] || 0)} responses</div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-
-      <div class="disclaimer">
-        Data refreshes on each page load · Anonymous only · No health data stored
-      </div>
-    `;
-
-    requestAnimationFrame(() => {
-      document.querySelectorAll('.urgency-bar-fill[data-width]').forEach(el => {
+    requestAnimationFrame(function() {
+      document.querySelectorAll('.urgency-bar-fill[data-width]').forEach(function(el) {
         el.style.width = el.dataset.width + '%';
       });
     });
