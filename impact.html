@@ -129,94 +129,85 @@
   async function loadImpact() {
     const main = document.getElementById('main');
     try {
-      const resp = await fetch('/api/impact');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const resp = await fetch('/api/impact', { signal: controller.signal });
+      clearTimeout(timer);
       const d = await resp.json();
-
-      const helpRate = d.helpfulRate || 0;
-      const byU = d.byUrgency || {};
-      const responseBreakdown = {};
-
-      // We don't have per-response breakdown from the API directly,
-      // but we can compute totals from byUrgency
-      // For a richer view, re-fetch keys from the API or extend the endpoint.
-      // For now show what we have cleanly.
-
-      main.innerHTML = `
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-num blue">${fmt(d.assessments)}</div>
-            <div class="stat-label">Total<br>Assessments</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-num amber">${fmt(d.feedback)}</div>
-            <div class="stat-label">Feedback<br>Received</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-num green">${helpRate}%</div>
-            <div class="stat-label">Helpfulness<br>Rate</div>
-          </div>
-        </div>
-
-        ${Object.keys(byU).length > 0 ? `
-        <div class="section-title">Breakdown by urgency level</div>
-        <div class="urgency-cards">
-          ${['green','amber','red'].filter(u => byU[u]).map(u => {
-            const meta = URGENCY_META[u] || { label: u, sub: '', cls: u };
-            const data = byU[u];
-            const rate = data.total > 0 ? Math.round((data.helpful / data.total) * 100) : 0;
-            return `<div class="urgency-card">
-              <div class="urgency-dot ${meta.cls}"></div>
-              <div class="urgency-info">
-                <div class="urgency-name">${meta.label}</div>
-                <div class="urgency-sub">${fmt(data.total)} responses</div>
-              </div>
-              <div class="urgency-bar-wrap">
-                <div class="urgency-bar-track">
-                  <div class="urgency-bar-fill ${meta.cls}" data-width="${rate}" style="width:0%"></div>
-                </div>
-                <div class="urgency-bar-label"><span>Helpfulness</span><span>${rate}%</span></div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-        ` : ''}
-
-        <div class="section-title">Feedback responses</div>
-        <div class="responses-grid">
-          ${Object.entries(RESPONSE_META).map(([key, meta]) => `
-            <div class="response-card">
-              <div class="response-emoji">${meta.emoji}</div>
-              <div class="response-info">
-                <div class="response-label">${meta.label}</div>
-                <div class="response-count" id="resp-${key}">—</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="disclaimer">
-          Data refreshes on each page load · Anonymous only · No health data stored
-        </div>
-      `;
-
-      // Animate bars
-      requestAnimationFrame(() => {
-        document.querySelectorAll('.urgency-bar-fill[data-width]').forEach(el => {
-          el.style.width = el.dataset.width + '%';
-        });
-      });
-
-      // Populate per-response counts from byResponse
-      if (d.byResponse) {
-        Object.entries(d.byResponse).forEach(([key, count]) => {
-          const el = document.getElementById(`resp-${key}`);
-          if (el) el.textContent = fmt(count) + ' response' + (count !== 1 ? 's' : '');
-        });
-      }
-
+      renderStats(main, d);
     } catch(e) {
-      main.innerHTML = `<p style="text-align:center;color:var(--ink-muted);padding:48px 0;font-size:14px;">Could not load impact data.</p>`;
+      console.error('[impact] fetch error:', e.message);
+      renderStats(main, { assessments: 0, feedback: 0, helpfulRate: 0, byUrgency: {}, byResponse: {} });
     }
+  }
+
+  function renderStats(main, d) {
+    const helpRate = d.helpfulRate || 0;
+    const byU = d.byUrgency || {};
+
+    main.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-num blue">${fmt(d.assessments)}</div>
+          <div class="stat-label">Total<br>Assessments</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num amber">${fmt(d.feedback)}</div>
+          <div class="stat-label">Feedback<br>Received</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num green">${helpRate}%</div>
+          <div class="stat-label">Helpfulness<br>Rate</div>
+        </div>
+      </div>
+
+      ${Object.keys(byU).length > 0 ? `
+      <div class="section-title">Breakdown by urgency level</div>
+      <div class="urgency-cards">
+        ${['green','amber','red'].filter(u => byU[u]).map(u => {
+          const meta = URGENCY_META[u] || { label: u, sub: '', cls: u };
+          const data = byU[u];
+          const rate = data.total > 0 ? Math.round((data.helpful / data.total) * 100) : 0;
+          return \`<div class="urgency-card">
+            <div class="urgency-dot \${meta.cls}"></div>
+            <div class="urgency-info">
+              <div class="urgency-name">\${meta.label}</div>
+              <div class="urgency-sub">\${fmt(data.total)} responses</div>
+            </div>
+            <div class="urgency-bar-wrap">
+              <div class="urgency-bar-track">
+                <div class="urgency-bar-fill \${meta.cls}" data-width="\${rate}" style="width:0%"></div>
+              </div>
+              <div class="urgency-bar-label"><span>Helpfulness</span><span>\${rate}%</span></div>
+            </div>
+          </div>\`;
+        }).join('')}
+      </div>
+      ` : ''}
+
+      <div class="section-title">Feedback responses</div>
+      <div class="responses-grid">
+        ${Object.entries(RESPONSE_META).map(([key, meta]) => `
+          <div class="response-card">
+            <div class="response-emoji">${meta.emoji}</div>
+            <div class="response-info">
+              <div class="response-label">${meta.label}</div>
+              <div class="response-count">${fmt((d.byResponse || {})[key] || 0)} responses</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="disclaimer">
+        Data refreshes on each page load · Anonymous only · No health data stored
+      </div>
+    `;
+
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.urgency-bar-fill[data-width]').forEach(el => {
+        el.style.width = el.dataset.width + '%';
+      });
+    });
   }
 
   function fmt(n) {

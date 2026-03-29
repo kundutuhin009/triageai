@@ -24,8 +24,12 @@ export default async function handler(req, res) {
 
   // Fire-and-forget: count assessments
   if (response.ok) {
-    const date = new Date().toISOString().split('T')[0];
-    redis.incr(`assessments:${date}`).catch(() => {});
+    const kvUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (kvUrl && kvToken) {
+      const date = new Date().toISOString().split('T')[0];
+      redis.incr(`assessments:${date}`).catch(e => console.error('[triage] Redis error:', e.message));
+    }
   }
 
   res.status(response.status).json(data);
