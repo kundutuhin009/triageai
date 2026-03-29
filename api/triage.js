@@ -1,3 +1,10 @@
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -15,21 +22,10 @@ export default async function handler(req, res) {
 
   const data = await response.json();
 
-  // Fire-and-forget: count assessments in KV
+  // Fire-and-forget: count assessments
   if (response.ok) {
-    const kvUrl = process.env.KV_REST_API_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN;
-    if (kvUrl && kvToken) {
-      const date = new Date().toISOString().split('T')[0];
-      fetch(`${kvUrl}/pipeline`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${kvToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([['INCR', `assessments:${date}`]]),
-      }).catch(() => {});
-    }
+    const date = new Date().toISOString().split('T')[0];
+    redis.incr(`assessments:${date}`).catch(() => {});
   }
 
   res.status(response.status).json(data);
