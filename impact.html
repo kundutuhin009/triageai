@@ -64,6 +64,24 @@
   .response-label { font-size: 13px; color: var(--ink); font-weight: 500; margin-bottom: 2px; }
   .response-count { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--ink-muted); }
   .disclaimer { text-align: center; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink-faint); letter-spacing: 1.5px; text-transform: uppercase; line-height: 2; padding-top: 24px; border-top: 1px solid var(--border); }
+  .rx-accuracy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .rx-accuracy-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 16px; text-align: center; }
+  .rx-accuracy-num { font-family: 'Fraunces', serif; font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 6px; }
+  .rx-accuracy-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; color: var(--ink-muted); text-transform: uppercase; }
+  .overall-accuracy { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
+  .overall-accuracy-label { font-size: 13px; color: var(--ink-muted); }
+  .overall-accuracy-val { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; color: var(--green); }
+  .pq-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 40px; }
+  .pq-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  .pq-row:last-child { border-bottom: none; }
+  .pq-label { font-size: 13px; color: var(--ink); font-weight: 500; }
+  .pq-sub { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+  .pq-right { display: flex; align-items: center; gap: 10px; }
+  .pq-rate { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 700; }
+  .pq-rate.pass { color: var(--green); }
+  .pq-rate.fail { color: var(--red); }
+  .pq-badge { font-size: 18px; }
+  @media (max-width: 600px) { .rx-accuracy-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; } .rx-accuracy-num { font-size: 24px; } }
   .loading-pulse { display: flex; gap: 6px; justify-content: center; align-items: center; padding: 48px 0; }
   .loading-pulse span { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.2s ease-in-out infinite; }
   .loading-pulse span:nth-child(2) { animation-delay: 0.2s; }
@@ -137,7 +155,8 @@
       renderStats(main, d);
     } catch(e) {
       console.error('[impact] fetch error:', e.message);
-      renderStats(main, { assessments: 0, feedback: 0, helpfulRate: 0, byUrgency: {}, byResponse: {} });
+      renderStats(main, { assessments: 0, feedback: 0, helpfulRate: 0, byUrgency: {}, byResponse: {},
+        prescription: { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 } });
     }
   }
 
@@ -178,19 +197,52 @@
     }).join('');
   }
 
+  function prescriptionSectionHtml(rx) {
+    rx = rx || { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 };
+    return '<div class="section-title">📋 Prescription Accuracy</div>'
+      + '<div class="rx-accuracy-grid">'
+      + '<div class="rx-accuracy-card"><div class="rx-accuracy-num" style="color:var(--green)">' + fmt(rx.correct) + '</div><div class="rx-accuracy-label">Mostly<br>Correct</div></div>'
+      + '<div class="rx-accuracy-card"><div class="rx-accuracy-num" style="color:var(--amber)">' + fmt(rx.mistakes) + '</div><div class="rx-accuracy-label">Some<br>Mistakes</div></div>'
+      + '<div class="rx-accuracy-card"><div class="rx-accuracy-num" style="color:var(--red)">' + fmt(rx.wrong) + '</div><div class="rx-accuracy-label">Mostly<br>Wrong</div></div>'
+      + '</div>'
+      + '<div class="overall-accuracy">'
+      + '<div><div class="overall-accuracy-label">Overall Accuracy Rate</div><div style="font-size:11px;color:var(--ink-faint);margin-top:3px">' + fmt(rx.total) + ' readings rated</div></div>'
+      + '<div class="overall-accuracy-val">' + rx.accuracyRate + '%</div>'
+      + '</div>';
+  }
+
+  function pqPerformanceHtml(helpRate, accuracyRate) {
+    var triagePass = helpRate >= 80;
+    var rxPass = accuracyRate >= 80;
+    return '<div class="section-title">⚡ Performance</div>'
+      + '<div class="pq-card">'
+      + '<div class="pq-row">'
+      + '<div><div class="pq-label">Triage Helpfulness</div><div class="pq-sub">👍 + 🏥 + 🏠 responses / total feedback</div></div>'
+      + '<div class="pq-right"><div class="pq-rate ' + (triagePass ? 'pass' : 'fail') + '">' + helpRate + '%</div><div class="pq-badge">' + (triagePass ? '✅' : '❌') + '</div></div>'
+      + '</div>'
+      + '<div class="pq-row">'
+      + '<div><div class="pq-label">Prescription Accuracy</div><div class="pq-sub">Mostly correct / total prescription ratings</div></div>'
+      + '<div class="pq-right"><div class="pq-rate ' + (rxPass ? 'pass' : 'fail') + '">' + accuracyRate + '%</div><div class="pq-badge">' + (rxPass ? '✅' : '❌') + '</div></div>'
+      + '</div>'
+      + '</div>';
+  }
+
   function renderStats(main, d) {
     var helpRate = d.helpfulRate || 0;
     var byU = d.byUrgency || {};
+    var rx = d.prescription || { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 };
 
     main.innerHTML =
       '<div class="stats-grid">'
       + '<div class="stat-card"><div class="stat-num blue">' + fmt(d.assessments) + '</div><div class="stat-label">Total<br>Assessments</div></div>'
-      + '<div class="stat-card"><div class="stat-num amber">' + fmt(d.feedback) + '</div><div class="stat-label">Feedback<br>Received</div></div>'
+      + '<div class="stat-card"><div class="stat-num amber">' + fmt(d.feedback) + '</div><div class="stat-label">Triage<br>Feedback</div></div>'
       + '<div class="stat-card"><div class="stat-num green">' + helpRate + '%</div><div class="stat-label">Helpfulness<br>Rate</div></div>'
       + '</div>'
       + urgencyCardsHtml(byU)
       + '<div class="section-title">Feedback responses</div>'
       + '<div class="responses-grid">' + responseCardsHtml(d.byResponse) + '</div>'
+      + prescriptionSectionHtml(rx)
+      + pqPerformanceHtml(helpRate, rx.accuracyRate)
       + '<div class="disclaimer">Data refreshes on each page load · Anonymous only · No health data stored</div>';
 
     requestAnimationFrame(function() {

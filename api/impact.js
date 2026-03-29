@@ -1,4 +1,7 @@
-const EMPTY = { assessments: 0, feedback: 0, helpfulRate: 0, byUrgency: {}, byResponse: {} };
+const EMPTY = {
+  assessments: 0, feedback: 0, helpfulRate: 0, byUrgency: {}, byResponse: {},
+  prescription: { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 },
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -16,7 +19,6 @@ export default async function handler(req, res) {
     return res.status(200).json(EMPTY);
   }
 
-  // AbortController kills all in-flight fetches if anything hangs
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 8000);
 
@@ -24,12 +26,13 @@ export default async function handler(req, res) {
     const headers = { Authorization: `Bearer ${token}` };
     const opts = { headers, signal: ctrl.signal };
 
-    const [feedbackKeys, assessmentKeys] = await Promise.all([
+    const [feedbackKeys, assessmentKeys, rxKeys] = await Promise.all([
       scanKeys(url, opts, 'feedback:*'),
       scanKeys(url, opts, 'assessments:*'),
+      scanKeys(url, opts, 'prescription_feedback:*'),
     ]);
 
-    console.log('[impact] feedbackKeys:', feedbackKeys.length, 'assessmentKeys:', assessmentKeys.length);
+    console.log('[impact] feedbackKeys:', feedbackKeys.length, 'assessmentKeys:', assessmentKeys.length, 'rxKeys:', rxKeys.length);
 
     let totalAssessments = 0;
     let totalFeedback = 0;
@@ -59,6 +62,24 @@ export default async function handler(req, res) {
       values.forEach(v => { totalAssessments += parseInt(v || 0, 10); });
     }
 
+    // Prescription accuracy
+    const prescription = { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 };
+    if (rxKeys.length > 0) {
+      const values = await mget(url, opts, rxKeys);
+      rxKeys.forEach((key, i) => {
+        const val = parseInt(values[i] || 0, 10);
+        if (!val) return;
+        const rating = key.split(':')[1]; // prescription_feedback:{rating}
+        if (rating === 'correct') prescription.correct += val;
+        else if (rating === 'mistakes') prescription.mistakes += val;
+        else if (rating === 'wrong') prescription.wrong += val;
+      });
+      prescription.total = prescription.correct + prescription.mistakes + prescription.wrong;
+      prescription.accuracyRate = prescription.total > 0
+        ? Math.round((prescription.correct / prescription.total) * 100)
+        : 0;
+    }
+
     clearTimeout(timeout);
     res.status(200).json({
       assessments: totalAssessments,
@@ -66,6 +87,7 @@ export default async function handler(req, res) {
       helpfulRate: totalFeedback > 0 ? Math.round((helpfulCount / totalFeedback) * 100) : 0,
       byUrgency,
       byResponse,
+      prescription,
     });
   } catch (e) {
     clearTimeout(timeout);
