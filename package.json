@@ -1,8 +1,5 @@
 {
   "name": "triageai",
   "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "@upstash/redis": "^1.34.0"
-  }
+  "type": "module"
 }

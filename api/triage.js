@@ -1,10 +1,3 @@
-import { Redis } from '@upstash/redis';
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -24,11 +17,15 @@ export default async function handler(req, res) {
 
   // Fire-and-forget: count assessments
   if (response.ok) {
-    const kvUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (kvUrl && kvToken) {
+    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (url && token) {
       const date = new Date().toISOString().split('T')[0];
-      redis.incr(`assessments:${date}`).catch(e => console.error('[triage] Redis error:', e.message));
+      fetch(`${url}/pipeline`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify([['INCR', `assessments:${date}`]]),
+      }).catch(e => console.error('[triage] Redis error:', e.message));
     }
   }
 
