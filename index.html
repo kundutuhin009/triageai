@@ -1362,11 +1362,11 @@ ${stepsText}
     _feedbackUrgency = urgency;
     document.getElementById('feedbackPrompt').style.display = 'block';
     document.getElementById('feedbackThanks').style.display = 'none';
-    document.getElementById('feedbackSection').style.display = 'block';
   }
 
   function closeFeedback() {
-    document.getElementById('feedbackSection').style.display = 'none';
+    document.getElementById('feedbackPrompt').style.display = 'block';
+    document.getElementById('feedbackThanks').style.display = 'none';
   }
 
   async function submitFeedback(response) {
@@ -1379,7 +1379,6 @@ ${stepsText}
         body: JSON.stringify({ urgency: _feedbackUrgency || 'unknown', response }),
       });
     } catch(e) {}
-    setTimeout(closeFeedback, 3000);
   }
   // --- End Feedback Section ---
 
@@ -1395,7 +1394,6 @@ ${stepsText}
     document.getElementById('age').value = '';
     document.getElementById('gender').value = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    closeFeedback();
   }
 </script>
 
