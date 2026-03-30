@@ -7,27 +7,64 @@ export default async function handler(req, res) {
   }
   if (pages.length > 5) return res.status(400).json({ error: 'Maximum 5 pages allowed' });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey   = process.env.ANTHROPIC_API_KEY;
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-  const redisHeaders = { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' };
+  const token    = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const rHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  // Fetch learned medicines for context (best-effort, 3s timeout)
-  let learnedMedicines = [];
-  if (redisUrl && redisToken) {
+  // ── PRE-READ: fetch top-50 medicine variations for prompt context ────────────
+  let variationsCtx = '';
+  if (redisUrl && token) {
     try {
       const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      const r = await fetch(`${redisUrl}/smembers/medicines:learned`, {
-        headers: { Authorization: `Bearer ${redisToken}` },
-        signal: ctrl.signal,
-      });
-      const d = await r.json();
-      learnedMedicines = (d.result || []).slice(0, 100);
-    } catch (_) {}
+      setTimeout(() => ctrl.abort(), 5000);
+      const opts = { headers: rHeaders, signal: ctrl.signal };
+
+      // 1. All canonical names from index
+      const idxResp = await fetch(`${redisUrl}/smembers/medicines:index`, opts);
+      const idxData = await idxResp.json();
+      const allNames = (idxData.result || []).filter(Boolean);
+
+      if (allNames.length > 0) {
+        // 2. Pipeline: HGET seen_count for every name → sort → top 50
+        const countPipeline = allNames.map(n => ['HGET', 'medicine:' + n, 'seen_count']);
+        const countResp = await fetch(`${redisUrl}/pipeline`, {
+          method: 'POST', headers: rHeaders, signal: ctrl.signal,
+          body: JSON.stringify(countPipeline),
+        });
+        const countData = await countResp.json();
+
+        const ranked = allNames
+          .map((name, i) => ({ name, count: parseInt(countData[i]?.result || 0, 10) }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 50);
+
+        // 3. Pipeline: HGET variations for top 50
+        const varPipeline = ranked.map(m => ['HGET', 'medicine:' + m.name, 'variations']);
+        const varResp = await fetch(`${redisUrl}/pipeline`, {
+          method: 'POST', headers: rHeaders, signal: ctrl.signal,
+          body: JSON.stringify(varPipeline),
+        });
+        const varData = await varResp.json();
+
+        const lines = ranked
+          .map((m, i) => {
+            const variations = varData[i]?.result || m.name;
+            return variations !== m.name ? `${m.name}: ${variations}` : m.name;
+          })
+          .filter(Boolean);
+
+        if (lines.length > 0) {
+          variationsCtx = '\n\nMedicine variations reference (seen in Indian prescriptions — use to identify unclear handwriting):\n'
+            + lines.join('\n') + '\n';
+        }
+      }
+    } catch (_) {
+      // Context fetch failed — continue without it
+    }
   }
 
-  // Build content blocks for all pages
+  // ── Build content blocks for all pages ──────────────────────────────────────
   const contentBlocks = [];
   for (let i = 0; i < pages.length; i++) {
     const { data, mediaType } = pages[i];
@@ -37,19 +74,13 @@ export default async function handler(req, res) {
     } else if (mediaType === 'application/pdf') {
       contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } });
     }
-    if (pages.length > 1) {
-      contentBlocks.push({ type: 'text', text: `[End of page ${i + 1}]` });
-    }
+    if (pages.length > 1) contentBlocks.push({ type: 'text', text: `[End of page ${i + 1}]` });
   }
-
-  const learnedCtx = learnedMedicines.length > 0
-    ? `\nPreviously seen medicines in this app (use as reference if helpful): ${learnedMedicines.join(', ')}\n`
-    : '';
 
   const pageLabel = pages.length === 1 ? '1 page' : `${pages.length} pages`;
 
-  // ── PASS 1: Full document read ──────────────────────────────────────────────
-  const pass1Prompt = `You are an expert medical document interpreter specialising in Indian healthcare. You are reading ${pageLabel} of a medical document.${learnedCtx}
+  // ── PASS 1: Full document read ───────────────────────────────────────────────
+  const pass1Prompt = `You are an expert medical document interpreter specialising in Indian healthcare. You are reading ${pageLabel} of a medical document.${variationsCtx}
 
 Step 1 — Identify document type: prescription, clinical_note, lab_report, discharge_summary, or unknown.
 Step 2 — Extract ALL visible text from ALL pages. Cross-reference with common Indian brands for unclear items.
@@ -113,11 +144,7 @@ Rules:
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 3000,
@@ -133,7 +160,7 @@ Rules:
 
   if (pass1Result.error) return res.status(200).json(pass1Result);
 
-  // ── PASS 2: Resolve unclear medicine names (text-only, Haiku) ──────────────
+  // ── PASS 2: Resolve unclear medicine names (text-only) ───────────────────────
   const unclearMeds = (pass1Result.medicines || []).filter(m => m.unclear);
   if (unclearMeds.length > 0) {
     const pass2Prompt = `Resolve illegible medicine names from an Indian prescription scan.
@@ -149,18 +176,14 @@ Return ONLY a JSON array (no markdown):
     try {
       const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
           messages: [{ role: 'user', content: pass2Prompt }],
         }),
       });
-      const r2 = await resp2.json();
+      const r2   = await resp2.json();
       const text2 = r2.content?.map(b => b.text || '').join('') || '';
       const resolutions = JSON.parse(text2.replace(/```json\n?|```/g, '').trim());
       if (Array.isArray(resolutions)) {
@@ -168,32 +191,118 @@ Return ONLY a JSON array (no markdown):
           if (!m.unclear) return m;
           const fix = resolutions.find(r => r.original === m.name);
           if (fix && fix.confidence !== 'low') {
-            return { ...m, name: fix.resolved, generic: fix.generic || m.generic, unclear: false };
+            // Keep _originalName so we can store it as a variation
+            return { ...m, name: fix.resolved, generic: fix.generic || m.generic, unclear: false, _originalName: m.name };
           }
           return m;
         });
       }
-    } catch (_) {
-      // Pass 2 failed — keep Pass 1 results as-is
-    }
+    } catch (_) { /* keep Pass 1 results */ }
   }
 
-  // ── Fire-and-forget: store medicine names + increment docs counter ─────────
-  if (redisUrl && redisToken) {
-    const medicineNames = (pass1Result.medicines || [])
-      .map(m => m.name)
-      .filter(n => n && n !== 'Not mentioned' && n.length > 1 && n.length < 60);
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const pipeline = [['INCR', 'docs_scanned:' + date]];
-    if (medicineNames.length > 0) {
-      pipeline.push(['SADD', 'medicines:learned', ...medicineNames]);
-      // Trim to max 500 (best-effort via SCARD check not needed — Redis SET deduplicates)
-    }
-    fetch(`${redisUrl}/pipeline`, {
-      method: 'POST',
-      headers: redisHeaders,
-      body: JSON.stringify(pipeline),
-    }).catch(() => {});
+  // ── POST-READ: update medicine HASHes (fire-and-forget) ─────────────────────
+  if (redisUrl && token) {
+    (async () => {
+      try {
+        const date = new Date().toISOString().slice(0, 10);
+
+        // Extract medicines — skip invalid names
+        const medicines = (pass1Result.medicines || [])
+          .map(m => ({
+            canonical: m.name,
+            variation: m._originalName || m.name,   // unclear original text, or same as canonical
+          }))
+          .filter(m => m.canonical && m.canonical !== 'Not mentioned'
+                    && m.canonical.length > 1 && m.canonical.length < 60);
+
+        if (medicines.length === 0) {
+          // Still count the document even if no medicines
+          await fetch(`${redisUrl}/pipeline`, {
+            method: 'POST', headers: rHeaders,
+            body: JSON.stringify([['INCR', 'docs_scanned:' + date.replace(/-/g, '')]]),
+          });
+          return;
+        }
+
+        // Check current index size — cap at 500
+        const scardResp = await fetch(`${redisUrl}/scard/medicines:index`, { headers: rHeaders });
+        const scardData = await scardResp.json();
+        const currentTotal = scardData.result || 0;
+
+        // Check which canonical names already exist in the index
+        const isMemPipeline = medicines.map(m => ['SISMEMBER', 'medicines:index', m.canonical]);
+        const isMemResp = await fetch(`${redisUrl}/pipeline`, {
+          method: 'POST', headers: rHeaders,
+          body: JSON.stringify(isMemPipeline),
+        });
+        const isMemData = await isMemResp.json();
+
+        // Build update pipeline
+        const pipeline = [['INCR', 'docs_scanned:' + date.replace(/-/g, '')]];
+        let newCount = 0;
+
+        for (let i = 0; i < medicines.length; i++) {
+          const { canonical, variation } = medicines[i];
+          const exists = isMemData[i]?.result === 1;
+
+          if (exists) {
+            // Increment seen_count and update last_seen
+            pipeline.push(['HINCRBY', 'medicine:' + canonical, 'seen_count', '1']);
+            pipeline.push(['HSET',    'medicine:' + canonical, 'last_seen', date]);
+            // Add variation if different from canonical (will be deduplicated later on read)
+            if (variation !== canonical) {
+              // Append variation if not already present — we store as pipe-separated string
+              // Use a script-free approach: always append; dedup happens on read
+              pipeline.push(['HGET', 'medicine:' + canonical, 'variations']); // placeholder — handled below
+            }
+          } else if (currentTotal + newCount < 500) {
+            // New medicine — create HASH entry and add to index
+            pipeline.push(['SADD', 'medicines:index', canonical]);
+            pipeline.push(['HSET', 'medicine:' + canonical,
+              'canonical',  canonical,
+              'variations', variation,
+              'seen_count', '1',
+              'last_seen',  date,
+            ]);
+            newCount++;
+          }
+        }
+
+        await fetch(`${redisUrl}/pipeline`, {
+          method: 'POST', headers: rHeaders,
+          body: JSON.stringify(pipeline.filter(cmd => cmd[0] !== 'HGET')),
+        });
+
+        // Append new variations for existing medicines (separate pass — read then write)
+        const existingWithVariations = medicines.filter((m, i) =>
+          isMemData[i]?.result === 1 && m.variation !== m.canonical
+        );
+        if (existingWithVariations.length > 0) {
+          const getVarPipeline = existingWithVariations.map(m => ['HGET', 'medicine:' + m.canonical, 'variations']);
+          const getVarResp = await fetch(`${redisUrl}/pipeline`, {
+            method: 'POST', headers: rHeaders,
+            body: JSON.stringify(getVarPipeline),
+          });
+          const getVarData = await getVarResp.json();
+
+          const setVarPipeline = existingWithVariations
+            .map((m, i) => {
+              const existing = getVarData[i]?.result || m.canonical;
+              const parts = existing.split('|').map(s => s.trim());
+              if (parts.includes(m.variation)) return null; // already recorded
+              return ['HSET', 'medicine:' + m.canonical, 'variations', existing + '|' + m.variation];
+            })
+            .filter(Boolean);
+
+          if (setVarPipeline.length > 0) {
+            await fetch(`${redisUrl}/pipeline`, {
+              method: 'POST', headers: rHeaders,
+              body: JSON.stringify(setVarPipeline),
+            });
+          }
+        }
+      } catch (_) { /* fire-and-forget — ignore errors */ }
+    })();
   }
 
   return res.status(200).json(pass1Result);

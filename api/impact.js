@@ -71,10 +71,10 @@ export default async function handler(req, res) {
       values.forEach(v => { totalDocsScanned += parseInt(v || 0, 10); });
     }
 
-    // Medicines learned (SCARD)
+    // Medicines learned (SCARD medicines:index — the new HASH-based structure)
     let medicinesLearned = 0;
     try {
-      const scardResp = await fetch(`${url}/scard/medicines:learned`, { headers, signal: opts.signal });
+      const scardResp = await fetch(`${url}/scard/medicines:index`, { headers, signal: opts.signal });
       const scardData = await scardResp.json();
       medicinesLearned = scardData.result || 0;
     } catch (_) {}
