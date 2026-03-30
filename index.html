@@ -342,6 +342,22 @@
   .feedback-btn .fb-emoji { display: block; font-size: 22px; margin-bottom: 5px; }
   .feedback-thanks { text-align: center; color: var(--primary); font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; display: none; padding: 8px 0; }
 
+  /* ── MULTI-UPLOAD THUMBNAILS ── */
+  .rx-page-counter { font-size: 12px; font-weight: 700; color: var(--ink-muted); margin-bottom: 10px; }
+  .rx-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .rx-thumb { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+  .rx-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; border: 2px solid var(--border); display: block; }
+  .rx-thumb-remove { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; background: #e53935; border-radius: 50%; border: 2px solid white; color: white; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+  .rx-add-more { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 2px dashed var(--border); border-radius: var(--radius-pill); font-size: 12px; font-weight: 700; color: var(--primary); background: var(--primary-light); cursor: pointer; transition: all 0.18s; margin-bottom: 14px; }
+  .rx-add-more:hover { border-color: var(--primary); }
+  .rx-doc-type-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 700; margin-bottom: 14px; }
+  .rx-doc-type-badge.prescription    { background: #e8f5e9; color: #2e7d32; border: 1.5px solid #a5d6a7; }
+  .rx-doc-type-badge.clinical_note   { background: #e3f2fd; color: #0d47a1; border: 1.5px solid #90caf9; }
+  .rx-doc-type-badge.lab_report      { background: #fff3e0; color: #e65100; border: 1.5px solid #ffcc80; }
+  .rx-doc-type-badge.discharge_summary { background: #f3e5f5; color: #4a148c; border: 1.5px solid #ce93d8; }
+  .rx-doc-type-badge.unknown         { background: var(--bg);  color: var(--ink-muted); border: 1.5px solid var(--border); }
+  .rx-pass2-note { font-size: 11px; color: var(--ink-muted); margin-bottom: 10px; font-style: italic; }
+
   /* ── FOOTER ── */
   footer { background: linear-gradient(135deg, #004d40, #00695c); padding: 32px 40px; text-align: center; margin-top: auto; }
   .footer-text { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 1.5px; text-transform: uppercase; line-height: 2.2; }
@@ -605,16 +621,19 @@
         </div>
       </div>
 
+      <!-- Upload area (visible until first file added) -->
       <div class="rx-upload-area" id="rxUploadArea" onclick="document.getElementById('rxFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="rxHandleDrop(event)">
-        <input type="file" id="rxFileInput" accept="image/*,.pdf" onchange="rxHandleFile(this.files[0])">
+        <input type="file" id="rxFileInput" accept="image/*" multiple onchange="rxHandleFiles(this.files)">
         <div class="rx-upload-icon">📷</div>
-        <div class="rx-upload-title">📎 Upload Medical Document</div>
-        <div class="rx-upload-sub">Works with prescriptions, clinical notes, lab reports — handwritten or typed</div>
+        <div class="rx-upload-title">📎 Upload up to 5 pages</div>
+        <div class="rx-upload-sub">Take photos of each page separately · Handwritten or typed · Prescriptions, notes, lab reports</div>
       </div>
 
-      <div class="rx-preview" id="rxPreview">
-        <img id="rxPreviewImg" src="" alt="Prescription preview" style="display:none">
-        <div class="rx-preview-pdf" id="rxPreviewPdf" style="display:none">📄 <span id="rxPdfName"></span></div>
+      <!-- Thumbnails (shown after upload) -->
+      <div id="rxThumbsArea" style="display:none">
+        <div class="rx-page-counter" id="rxPageCounter">0/5 pages added</div>
+        <div class="rx-thumbs" id="rxThumbs"></div>
+        <label class="rx-add-more" id="rxAddMore" for="rxFileInput">+ Add more pages</label>
       </div>
 
       <button class="rx-translate-btn" id="rxTranslateBtn" onclick="rxTranslate()" disabled>
@@ -622,6 +641,8 @@
       </button>
 
       <div class="rx-result" id="rxResult">
+        <div id="rxDocTypeBadge"></div>
+        <div id="rxPass2Note"></div>
         <div id="rxMedicineList"></div>
         <div class="rx-location-section">
           <div>
@@ -1112,75 +1133,99 @@ ${stepsText}
   })();
 
   // Prescription Translator
-  let rxFile = null;
+  // rxFiles is declared inside rxHandleFiles block above
 
-  function rxHandleFile(file) {
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert('File too large. Please use an image under 5MB.'); return; }
-    rxFile = file;
-    const preview = document.getElementById('rxPreview');
-    preview.style.display = 'block';
-    document.getElementById('rxUploadArea').style.display = 'none';
-    if (file.type === 'application/pdf') {
-      document.getElementById('rxPreviewImg').style.display = 'none';
-      document.getElementById('rxPreviewPdf').style.display = 'flex';
-      document.getElementById('rxPdfName').textContent = file.name;
-    } else {
-      document.getElementById('rxPreviewPdf').style.display = 'none';
-      const img = document.getElementById('rxPreviewImg');
-      img.style.display = 'block';
-      img.src = URL.createObjectURL(file);
+  var rxFiles = []; // array of File objects (up to 5)
+
+  function rxHandleFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    const remaining = 5 - rxFiles.length;
+    const toAdd = Array.from(fileList).slice(0, remaining);
+    for (const file of toAdd) {
+      if (!file.type.startsWith('image/')) { alert('Only image files are supported. Please take a photo of the document.'); continue; }
+      if (file.size > 8 * 1024 * 1024) { alert('Image too large (max 8MB). Please compress or retake.'); continue; }
+      rxFiles.push(file);
     }
+    // Reset input so same file can be re-added if removed
+    document.getElementById('rxFileInput').value = '';
+    rxRenderThumbs();
+  }
+
+  function rxRenderThumbs() {
+    const thumbsArea = document.getElementById('rxThumbsArea');
+    const thumbsEl = document.getElementById('rxThumbs');
+    const counter = document.getElementById('rxPageCounter');
+    const addMore = document.getElementById('rxAddMore');
+    const uploadArea = document.getElementById('rxUploadArea');
+
+    if (rxFiles.length === 0) {
+      thumbsArea.style.display = 'none';
+      uploadArea.style.display = 'block';
+      document.getElementById('rxTranslateBtn').disabled = true;
+      return;
+    }
+
+    uploadArea.style.display = 'none';
+    thumbsArea.style.display = 'block';
+    counter.textContent = rxFiles.length + '/5 pages added';
+    addMore.style.display = rxFiles.length >= 5 ? 'none' : 'inline-flex';
+
+    thumbsEl.innerHTML = rxFiles.map((f, i) =>
+      '<div class="rx-thumb">'
+      + '<img src="' + URL.createObjectURL(f) + '" alt="Page ' + (i+1) + '">'
+      + '<button class="rx-thumb-remove" onclick="rxRemovePage(' + i + ')" title="Remove page ' + (i+1) + '">✕</button>'
+      + '</div>'
+    ).join('');
+
     document.getElementById('rxTranslateBtn').disabled = false;
+  }
+
+  function rxRemovePage(index) {
+    rxFiles.splice(index, 1);
+    rxRenderThumbs();
   }
 
   function rxHandleDrop(e) {
     e.preventDefault();
     document.getElementById('rxUploadArea').classList.remove('drag');
-    const file = e.dataTransfer.files[0];
-    if (file) rxHandleFile(file);
+    rxHandleFiles(e.dataTransfer.files);
   }
 
   async function rxTranslate() {
-    if (!rxFile) return;
+    if (rxFiles.length === 0) return;
     const btn = document.getElementById('rxTranslateBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ Reading prescription...';
+    btn.textContent = '🔧 Enhancing images...';
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      let base64, mediaType;
-      // Preprocess images; send PDFs as-is
-      if (rxFile.type === 'application/pdf') {
-        base64 = e.target.result.split(',')[1];
-        mediaType = 'application/pdf';
-      } else {
-        btn.textContent = '🔧 Enhancing image...';
-        try {
-          base64 = await preprocessImage(e.target.result);
-        } catch(_) {
-          base64 = e.target.result.split(',')[1];
-        }
-        mediaType = 'image/jpeg';
-        btn.textContent = '⏳ Reading prescription...';
-      }
-      try {
-        const resp = await fetch('/api/prescription', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: base64, mediaType })
+    try {
+      // Preprocess all images in parallel
+      const pages = await Promise.all(rxFiles.map(async (file) => {
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = e => res(e.target.result);
+          fr.onerror = rej;
+          fr.readAsDataURL(file);
         });
-        const apiResult = await resp.json();
-        const text = apiResult.content?.map(b => b.text || '').join('') || '';
-        const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-        if (parsed.error) { alert('Could not read prescription: ' + parsed.error); rxResetBtn(); return; }
-        rxShowResult(parsed);
-      } catch(err) {
-        alert('Something went wrong. Please try again.');
-        rxResetBtn();
-      }
-    };
-    reader.readAsDataURL(rxFile);
+        let base64;
+        try { base64 = await preprocessImage(dataUrl); }
+        catch (_) { base64 = dataUrl.split(',')[1]; }
+        return { data: base64, mediaType: 'image/jpeg' };
+      }));
+
+      btn.textContent = rxFiles.length > 1 ? '⏳ Reading ' + rxFiles.length + ' pages...' : '⏳ Reading document...';
+
+      const resp = await fetch('/api/prescription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pages })
+      });
+      const parsed = await resp.json();
+      if (parsed.error) { alert('Could not read document: ' + parsed.error); rxResetBtn(); return; }
+      rxShowResult(parsed);
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+      rxResetBtn();
+    }
   }
 
   function preprocessImage(dataUrl) {
@@ -1250,7 +1295,7 @@ ${stepsText}
 
   function rxResetBtn() {
     const btn = document.getElementById('rxTranslateBtn');
-    btn.disabled = false;
+    btn.disabled = rxFiles.length === 0;
     btn.innerHTML = '🔍 Read Document';
   }
 
@@ -1259,9 +1304,27 @@ ${stepsText}
     let waText = '';
     const type = data.document_type || 'prescription';
 
-    const typeLabels = { prescription: '💊 Prescription', clinical_note: '📋 Clinical Note', lab_report: '🧪 Lab Report' };
-    html += `<div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-muted);margin-bottom:12px">${typeLabels[type] || '📄 Medical Document'}</div>`;
-    waText = `${typeLabels[type] || '📄 Medical Document'}\n_(via TriageAI Medical Document Reader)_\n\n`;
+    const typeLabels = {
+      prescription:      { icon: '💊', label: 'Prescription' },
+      clinical_note:     { icon: '🔬', label: 'Clinical Note' },
+      lab_report:        { icon: '🧪', label: 'Lab Report' },
+      discharge_summary: { icon: '📄', label: 'Discharge Summary' },
+      unknown:           { icon: '❓', label: 'Medical Document' },
+    };
+    const typeMeta = typeLabels[type] || typeLabels.unknown;
+    const typeLabel = typeMeta.icon + ' ' + typeMeta.label;
+
+    // Show type badge
+    document.getElementById('rxDocTypeBadge').innerHTML =
+      '<span class="rx-doc-type-badge ' + type + '">' + typeLabel + '</span>';
+
+    // Show pass-2 note if any unclear items were present
+    const hadUnclear = (data.medicines || []).some(m => m.unclear);
+    document.getElementById('rxPass2Note').innerHTML = hadUnclear
+      ? '<div class="rx-pass2-note">⚠️ Some items were unclear. AI has made best-guess resolutions — please verify.</div>'
+      : '';
+
+    waText = typeLabel + '\n_(via TriageAI Medical Document Reader)_\n\n';
 
     // PRESCRIPTION
     if (type === 'prescription') {
@@ -1335,6 +1398,28 @@ ${stepsText}
       });
     }
 
+    // DISCHARGE SUMMARY
+    if (type === 'discharge_summary' && data.discharge) {
+      const d = data.discharge;
+      const fields = [
+        ['📅', 'Admitted', d.admission_date],
+        ['🏁', 'Discharged', d.discharge_date],
+        ['📊', 'Diagnosis', d.diagnosis],
+        ['💊', 'Treatment', d.treatment_summary],
+        ['🔴', 'Discharge Meds', d.discharge_medicines],
+        ['🔄', 'Follow-up', d.follow_up],
+      ];
+      html += '<div class="rx-medicine">';
+      fields.forEach(([icon, label, val]) => {
+        if (val && val !== 'Not mentioned') {
+          html += '<div class="rx-row" style="margin-bottom:8px"><span class="rx-row-icon">' + icon + '</span><span class="rx-row-label">' + label + '</span><span class="rx-row-val">' + val + '</span></div>';
+          waText += icon + ' *' + label + ':* ' + val + '\n';
+        }
+      });
+      html += '</div>';
+      waText += '\n';
+    }
+
     // Shared footer fields
     if (data.doctor_notes) {
       html += `<div class="rx-notes">📝 <strong>Notes:</strong> ${data.doctor_notes}</div>`;
@@ -1357,13 +1442,15 @@ ${stepsText}
   }
 
   function rxReset() {
-    rxFile = null;
+    rxFiles = [];
     document.getElementById('rxFileInput').value = '';
-    document.getElementById('rxPreview').style.display = 'none';
+    document.getElementById('rxThumbsArea').style.display = 'none';
+    document.getElementById('rxThumbs').innerHTML = '';
     document.getElementById('rxUploadArea').style.display = 'block';
-    document.getElementById('rxPreviewImg').src = '';
     document.getElementById('rxResult').classList.remove('visible');
     document.getElementById('rxMedicineList').innerHTML = '';
+    document.getElementById('rxDocTypeBadge').innerHTML = '';
+    document.getElementById('rxPass2Note').innerHTML = '';
     document.getElementById('rxTranslateBtn').disabled = true;
     document.getElementById('rxTranslateBtn').innerHTML = '🔍 Read Document';
     document.getElementById('pharmaciesCard').classList.remove('visible');

@@ -1,6 +1,7 @@
 const EMPTY = {
   assessments: 0, feedback: 0, helpfulRate: 0, byUrgency: {}, byResponse: {},
   prescription: { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 },
+  docsScanned: 0, medicinesLearned: 0,
 };
 
 export default async function handler(req, res) {
@@ -26,10 +27,11 @@ export default async function handler(req, res) {
     const headers = { Authorization: `Bearer ${token}` };
     const opts = { headers, signal: ctrl.signal };
 
-    const [feedbackKeys, assessmentKeys, rxKeys] = await Promise.all([
+    const [feedbackKeys, assessmentKeys, rxKeys, docsKeys] = await Promise.all([
       scanKeys(url, opts, 'feedback:*'),
       scanKeys(url, opts, 'assessments:*'),
       scanKeys(url, opts, 'prescription_feedback:*'),
+      scanKeys(url, opts, 'docs_scanned:*'),
     ]);
 
     console.log('[impact] feedbackKeys:', feedbackKeys.length, 'assessmentKeys:', assessmentKeys.length, 'rxKeys:', rxKeys.length);
@@ -62,6 +64,21 @@ export default async function handler(req, res) {
       values.forEach(v => { totalAssessments += parseInt(v || 0, 10); });
     }
 
+    // Docs scanned total
+    let totalDocsScanned = 0;
+    if (docsKeys.length > 0) {
+      const values = await mget(url, opts, docsKeys);
+      values.forEach(v => { totalDocsScanned += parseInt(v || 0, 10); });
+    }
+
+    // Medicines learned (SCARD)
+    let medicinesLearned = 0;
+    try {
+      const scardResp = await fetch(`${url}/scard/medicines:learned`, { headers, signal: opts.signal });
+      const scardData = await scardResp.json();
+      medicinesLearned = scardData.result || 0;
+    } catch (_) {}
+
     // Prescription accuracy
     const prescription = { correct: 0, mistakes: 0, wrong: 0, total: 0, accuracyRate: 0 };
     if (rxKeys.length > 0) {
@@ -88,6 +105,8 @@ export default async function handler(req, res) {
       byUrgency,
       byResponse,
       prescription,
+      docsScanned: totalDocsScanned,
+      medicinesLearned,
     });
   } catch (e) {
     clearTimeout(timeout);
