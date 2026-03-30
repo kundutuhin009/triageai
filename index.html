@@ -28,10 +28,10 @@
     --shadow-lg: 0 8px 40px rgba(0,137,123,0.15);
     --radius: 16px; --radius-pill: 100px;
   }
-  body { background: linear-gradient(135deg, #e0f7f4 0%, #f0faf8 50%, #e8f4fd 100%); background-attachment: fixed; color: var(--ink); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  body { background: linear-gradient(135deg, #e0f7f4 0%, #f0faf8 50%, #e8f4fd 100%); background-attachment: fixed; color: var(--ink); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; padding-top: 48px; }
 
   /* ── HEADER ── */
-  header { background: linear-gradient(135deg, #00897b 0%, #00acc1 50%, #0097a7 100%); background-size: 200% 100%; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 16px rgba(0,137,123,0.3); animation: headerShimmer 3s ease 0.5s 1 forwards; }
+  header { background: linear-gradient(135deg, #00897b 0%, #00acc1 50%, #0097a7 100%); background-size: 200% 100%; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: space-between; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; box-shadow: 0 2px 16px rgba(0,137,123,0.3); animation: headerShimmer 3s ease 0.5s 1 forwards; }
   @keyframes headerShimmer { 0% { background-position: 100% 0; } 100% { background-position: 0% 0; } }
   .logo { display: flex; align-items: center; gap: 8px; }
   .logo-icon { width: 28px; height: 28px; background: rgba(255,255,255,0.25); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
