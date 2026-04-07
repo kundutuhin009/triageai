@@ -1,39 +1,22 @@
 import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai';
 
-// Initialise clients once — both are optional; RAG fails silently if unconfigured
-const openaiClient = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
-
-// Cache the Pinecone index object at module level to avoid re-creating per request
+// Cache index at module level — Pinecone handles embeddings via llama-text-embed-v2
 const pineconeIndex = (process.env.PINECONE_API_KEY && process.env.PINECONE_INDEX_NAME)
-  ? new Pinecone({ apiKey: process.env.PINECONE_API_KEY }).Index(process.env.PINECONE_INDEX_NAME)
+  ? new Pinecone({ apiKey: process.env.PINECONE_API_KEY }).index({ name: process.env.PINECONE_INDEX_NAME })
   : null;
-
-async function embedText(text) {
-  const resp = await openaiClient.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text,
-    dimensions: 1024,
-  });
-  return resp.data[0].embedding;
-}
 
 async function getRelevantResearch(userMessage) {
-  if (!pineconeIndex || !openaiClient) return '';
+  if (!pineconeIndex) return '';
   try {
-    const queryVector = await embedText(userMessage);
-    const results = await index.query({
-      vector: queryVector,
-      topK: 2,
-      includeMetadata: true,
+    const results = await pineconeIndex.searchRecords({
+      query: { inputs: { text: userMessage }, topK: 2 },
+      fields: ['title', 'source', 'text'],
     });
-    const matches = (results.matches || []).filter(m => (m.score || 0) > 0.7);
-    if (!matches.length) return '';
-    const context = matches
-      .map(m => `[${m.metadata.title}]:\n${m.metadata.content}`)
-      .join('\n\n---\n\n');
+    const context = results.result?.hits
+      ?.filter(h => (h._score || 0) > 0.5)
+      ?.map(h => h.fields?.text)
+      ?.join('\n\n') || '';
+    if (!context) return '';
     return (
       '\n\nRELEVANT RESEARCH CONTEXT:\n' +
       context +

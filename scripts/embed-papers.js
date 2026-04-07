@@ -1,35 +1,21 @@
 /**
  * Emo Buddy — Research Embedding Script
  *
- * Runs ONCE locally to embed mental health research papers into Pinecone.
+ * Runs ONCE locally to load mental health research papers into Pinecone.
+ * Pinecone embeds the text automatically via llama-text-embed-v2 (no OpenAI needed).
+ *
  * Run with:
  *   node --env-file=.env.local scripts/embed-papers.js
  *
  * Prerequisites:
- *   - Pinecone index created (see README below)
- *   - PINECONE_API_KEY, PINECONE_INDEX_NAME, OPENAI_API_KEY in .env.local
- *
- * Pinecone index settings:
- *   Name:       emo-buddy-research  (or whatever PINECONE_INDEX_NAME is set to)
- *   Dimensions: 1024
- *   Metric:     cosine
+ *   - Pinecone index created with llama-text-embed-v2 integrated embeddings
+ *   - PINECONE_API_KEY and PINECONE_INDEX_NAME set in .env.local
  */
 
 import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai';
 
 const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const index = pc.index(process.env.PINECONE_INDEX_NAME);
-
-async function embed(text) {
-  const resp = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text,
-    dimensions: 1024,
-  });
-  return resp.data[0].embedding;
-}
 
 const papers = [
   {
@@ -338,21 +324,18 @@ const papers = [
   }
 ];
 
-console.log(`Embedding ${papers.length} papers into Pinecone index: ${process.env.PINECONE_INDEX_NAME}\n`);
+console.log(`Upserting ${papers.length} papers into Pinecone index: ${process.env.PINECONE_INDEX_NAME}`);
+console.log('Pinecone will embed each record automatically via llama-text-embed-v2.\n');
 
 for (const paper of papers) {
-  process.stdout.write(`  Embedding: ${paper.title} ... `);
+  process.stdout.write(`  Upserting: ${paper.title} ... `);
   try {
-    const values = await embed(`${paper.title}\n\n${paper.content}`);
-    await index.upsert([{
-      id: paper.id,
-      values,
-      metadata: {
-        title: paper.title,
-        source: paper.source,
-        content: paper.content,
-      },
-    }]);
+    await index.upsertRecords({ records: [{
+      _id: paper.id,
+      text: paper.content,   // Pinecone embeds this field automatically
+      title: paper.title,
+      source: paper.source,
+    }] });
     console.log('✓');
   } catch (e) {
     console.log(`✗ FAILED: ${e.message}`);
