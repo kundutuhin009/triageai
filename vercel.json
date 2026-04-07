@@ -1,6 +1,7 @@
 {
   "rewrites": [
-    { "source": "/impact", "destination": "/impact.html" }
+    { "source": "/impact", "destination": "/impact.html" },
+    { "source": "/emo-buddy", "destination": "/emo-buddy.html" }
   ],
   "headers": [
     {
