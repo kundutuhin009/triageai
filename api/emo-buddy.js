@@ -1,3 +1,50 @@
+import { Pinecone } from '@pinecone-database/pinecone';
+import OpenAI from 'openai';
+
+// Initialise clients once — both are optional; RAG fails silently if unconfigured
+const openaiClient = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
+// Cache the Pinecone index object at module level to avoid re-creating per request
+const pineconeIndex = (process.env.PINECONE_API_KEY && process.env.PINECONE_INDEX_NAME)
+  ? new Pinecone({ apiKey: process.env.PINECONE_API_KEY }).Index(process.env.PINECONE_INDEX_NAME)
+  : null;
+
+async function embedText(text) {
+  const resp = await openaiClient.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text,
+    dimensions: 1024,
+  });
+  return resp.data[0].embedding;
+}
+
+async function getRelevantResearch(userMessage) {
+  if (!pineconeIndex || !openaiClient) return '';
+  try {
+    const queryVector = await embedText(userMessage);
+    const results = await index.query({
+      vector: queryVector,
+      topK: 2,
+      includeMetadata: true,
+    });
+    const matches = (results.matches || []).filter(m => (m.score || 0) > 0.7);
+    if (!matches.length) return '';
+    const context = matches
+      .map(m => `[${m.metadata.title}]:\n${m.metadata.content}`)
+      .join('\n\n---\n\n');
+    return (
+      '\n\nRELEVANT RESEARCH CONTEXT:\n' +
+      context +
+      '\n\nUse the above research to inform your response naturally — do not quote it directly or mention paper titles. Just let it guide your approach.'
+    );
+  } catch (e) {
+    console.error('[emo-buddy] RAG retrieval error:', e.message);
+    return ''; // fail silently — never break the conversation
+  }
+}
+
 const SYSTEM_PROMPT = `MOST IMPORTANT RULE: You are NOT an assistant completing a task. You are a friend sitting with someone in a difficult moment.
 
 The difference:
@@ -109,6 +156,11 @@ export default async function handler(req, res) {
   // Trim to last 20 exchanges to avoid token overflow
   const trimmed = messages.slice(-20);
 
+  // RAG: retrieve relevant research based on the last user message (fails silently)
+  const lastUserMessage = trimmed.filter(m => m.role === 'user').pop()?.content || '';
+  const researchContext = await getRelevantResearch(lastUserMessage);
+  const systemPrompt = SYSTEM_PROMPT + researchContext;
+
   let anthropicResp;
   try {
     anthropicResp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -122,7 +174,7 @@ export default async function handler(req, res) {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         stream: true,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: trimmed,
       }),
     });

@@ -1,5 +1,9 @@
 {
   "name": "triageai",
   "version": "1.0.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@pinecone-database/pinecone": "^7.1.0",
+    "openai": "^6.33.0"
+  }
 }
