@@ -97,8 +97,10 @@ PATIENT NAME rules (critical):
 MEDICATION rules:
 - Copy the handwritten drug name EXACTLY as written — do not replace with pharmacological equivalents
 - If unclear, write "[unclear: bestguess?]" — never omit or substitute
-- Blood test orders (e.g. "Blood (F): Sugar, HbA1c") go in labTestsOrdered, NOT medications
+- Any item starting with "Blood" followed by test names (Sugar, HbA1c, CBC, etc.) is ALWAYS a lab test order — put it in labTestsOrdered, NEVER in medications
 - Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
+- "contm" or "contin" means "continue", not "consider"
+- Read dosages carefully: "1gm" means 1 gram, NOT 15mg — these are medically very different
 
 FIELD MAPPING rules:
 - clinicalNotes = clinical presentation written on the left side of the prescription (symptoms, history, examination findings)
