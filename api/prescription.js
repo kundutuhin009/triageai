@@ -7,10 +7,11 @@ export default async function handler(req, res) {
   }
   if (pages.length > 5) return res.status(400).json({ error: 'Maximum 5 pages allowed' });
 
-  const apiKey   = process.env.ANTHROPIC_API_KEY;
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const token    = process.env.UPSTASH_REDIS_REST_TOKEN;
-  const rHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const apiKey        = process.env.ANTHROPIC_API_KEY;
+  const visionApiKey  = process.env.GOOGLE_VISION_API_KEY;
+  const redisUrl      = process.env.UPSTASH_REDIS_REST_URL;
+  const token         = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const rHeaders      = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   // ── PRE-READ: fetch top-50 medicine variations for prompt context ────────────
   let variationsCtx = '';
@@ -20,13 +21,11 @@ export default async function handler(req, res) {
       setTimeout(() => ctrl.abort(), 5000);
       const opts = { headers: rHeaders, signal: ctrl.signal };
 
-      // 1. All canonical names from index
-      const idxResp = await fetch(`${redisUrl}/smembers/medicines:index`, opts);
-      const idxData = await idxResp.json();
+      const idxResp  = await fetch(`${redisUrl}/smembers/medicines:index`, opts);
+      const idxData  = await idxResp.json();
       const allNames = (idxData.result || []).filter(Boolean);
 
       if (allNames.length > 0) {
-        // 2. Pipeline: HGET seen_count for every name → sort → top 50
         const countPipeline = allNames.map(n => ['HGET', 'medicine:' + n, 'seen_count']);
         const countResp = await fetch(`${redisUrl}/pipeline`, {
           method: 'POST', headers: rHeaders, signal: ctrl.signal,
@@ -39,7 +38,6 @@ export default async function handler(req, res) {
           .sort((a, b) => b.count - a.count)
           .slice(0, 50);
 
-        // 3. Pipeline: HGET variations for top 50
         const varPipeline = ranked.map(m => ['HGET', 'medicine:' + m.name, 'variations']);
         const varResp = await fetch(`${redisUrl}/pipeline`, {
           method: 'POST', headers: rHeaders, signal: ctrl.signal,
@@ -55,117 +53,190 @@ export default async function handler(req, res) {
           .filter(Boolean);
 
         if (lines.length > 0) {
-          variationsCtx = '\n\nMedicine variations reference (seen in Indian prescriptions — use to identify unclear handwriting):\n'
+          variationsCtx = '\n\nMedicine variations reference (seen in Indian prescriptions):\n'
             + lines.join('\n') + '\n';
         }
       }
+    } catch (_) { /* continue without context */ }
+  }
+
+  // ── STEP 1: Google Vision OCR (images only) ──────────────────────────────────
+  // Only attempt Vision if all pages are images and the API key is configured.
+  // PDFs and Vision failures fall back to Claude-with-image (Step 1b below).
+  const allImages = pages.every(p => p.mediaType?.startsWith('image/'));
+  let visionRawText = null;
+
+  if (allImages && visionApiKey) {
+    try {
+      const visionTexts = [];
+      for (let i = 0; i < pages.length; i++) {
+        const { data } = pages[i];
+        const vResp = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${visionApiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requests: [{
+                image: { content: data },
+                features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+              }],
+            }),
+          }
+        );
+        const vData = await vResp.json();
+        const text  = vData.responses?.[0]?.fullTextAnnotation?.text || '';
+        if (text) {
+          visionTexts.push(pages.length > 1 ? `[Page ${i + 1}]\n${text}` : text);
+        }
+      }
+      if (visionTexts.length === pages.length) {
+        // All pages extracted successfully
+        visionRawText = visionTexts.join('\n\n');
+      }
     } catch (_) {
-      // Context fetch failed — continue without it
+      visionRawText = null; // fall through to Claude-with-image
     }
   }
 
-  // ── Build content blocks for all pages ──────────────────────────────────────
-  const contentBlocks = [];
-  for (let i = 0; i < pages.length; i++) {
-    const { data, mediaType } = pages[i];
-    if (!data || !mediaType) continue;
-    if (mediaType.startsWith('image/')) {
-      contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
-    } else if (mediaType === 'application/pdf') {
-      contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } });
-    }
-    if (pages.length > 1) contentBlocks.push({ type: 'text', text: `[End of page ${i + 1}]` });
-  }
-
-  const pageLabel = pages.length === 1 ? '1 page' : `${pages.length} pages`;
-
-  // ── PASS 1: Full document read ───────────────────────────────────────────────
-  const systemPrompt = `You are a precise medical document OCR reader. Extract ONLY what is explicitly written in the image.
-- Never substitute drug names with pharmacological equivalents (e.g. if written "Ostoshine", do NOT write "Ossein Hydroxyapatite")
-- Never split continuous handwritten names into initials (e.g. "LAXMI" must not become "L.A.X.M.I" or "L.X.M")
-- Never infer, assume, or add information not visible in the document`;
-
-  const userPrompt = `Carefully read every part of this handwritten prescription image. You are reading ${pageLabel}.${variationsCtx}
-
-PATIENT NAME rules (critical):
-- Read the full name as a single continuous string, left to right
-- It is a person's name, likely Indian — common patterns: first name + surname (e.g. "LAXMI BORA", "RAHUL SHARMA")
-- Do NOT interpret letters as initials or abbreviations
-- Do NOT add dots between letters
-- If genuinely unclear, write your best attempt as a full name, not initials
-
-MEDICATION rules:
-- Copy the handwritten drug name EXACTLY as written — do not replace with pharmacological equivalents
-- If unclear, write "[unclear: bestguess?]" — never omit or substitute
-- Any item starting with "Blood" followed by test names (Sugar, HbA1c, CBC, etc.) is ALWAYS a lab test order — put it in labTestsOrdered, NEVER in medications
-- Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
-- "contm" or "contin" means "continue", not "consider"
-- Read dosages carefully: "1gm" means 1 gram, NOT 15mg — these are medically very different
-
-FIELD MAPPING rules:
-- clinicalNotes = clinical presentation written on the left side of the prescription (symptoms, history, examination findings)
-- recommendations = text starting with "will benefit from..." or advice the doctor writes about lifestyle/treatment approach
-- existingLabResults = test values already written on the document (e.g. "Sugar: 180 mg/dL")
-- labTestsOrdered = new tests the doctor is ordering
-
-Return ONLY this JSON, no extra text, no markdown:
-{
-  "document_type": "prescription" | "clinical_note" | "lab_report" | "discharge_summary" | "unknown",
-  "patientDetails": { "name": null, "age": null, "sex": null, "date": null },
-  "doctor": null,
-  "clinic": null,
-  "diagnosis": null,
-  "clinicalNotes": null,
-  "medications": [
-    { "name": "", "dosage": null, "frequency": null, "instructions": null }
-  ],
-  "existingLabResults": [
-    { "test": "", "value": "" }
-  ],
-  "labTestsOrdered": [],
-  "recommendations": null,
-  "followUp": null
-}
-
-If completely unreadable: {"error": "Could not read document"}`;
-
+  // ── STEP 2: Claude structured parsing ────────────────────────────────────────
   function parseJSON(text) {
     return JSON.parse(text.replace(/```json\n?|```/g, '').trim());
   }
 
-  let pass1Result;
-  try {
-    const apiHeaders = { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
-    const pass1Body = {
+  const claudeHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+
+  const jsonSchema = `{
+  "document_type": "prescription" | "clinical_note" | "lab_report" | "discharge_summary" | "unknown",
+  "patientDetails": { "name": "", "age": "", "sex": "", "date": "" },
+  "doctor": "",
+  "clinic": "",
+  "diagnosis": "",
+  "clinicalNotes": "",
+  "medications": [
+    { "name": "", "dosage": "", "frequency": "", "instructions": "" }
+  ],
+  "existingLabResults": [{ "test": "", "value": "" }],
+  "labTestsOrdered": [],
+  "recommendations": "",
+  "followUp": ""
+}`;
+
+  let claudeBody;
+
+  if (visionRawText) {
+    // ── Path A: Vision succeeded — send text only to Claude ──────────────────
+    const systemPrompt = `You are a medical prescription parser. You receive raw OCR text extracted by Google Vision from an Indian handwritten prescription. Your job is to parse it into structured data accurately.`;
+
+    const userPrompt = `This is raw OCR text from a handwritten Indian prescription:
+"""
+${visionRawText}
+"""
+${variationsCtx}
+Rules:
+- Patient name is a continuous Indian name (e.g. "LAXMI BORA", "RAHUL SHARMA") — not initials, no dots between letters
+- "contm" or "contin" = "continue"
+- "1gm" = 1 gram (NOT 15mg) — medically critical distinction
+- Any item starting with "Blood" followed by test names (Sugar, HbA1c, CBC, etc.) is ALWAYS a lab test order — put it in labTestsOrdered, NEVER in medications
+- Copy drug names EXACTLY as written — do not substitute with pharmacological equivalents
+- If a drug name is unclear, write "[unclear: bestguess?]"
+- clinicalNotes = clinical presentation on the left side (symptoms, history, examination findings)
+- recommendations = "will benefit from..." or lifestyle/treatment advice
+- existingLabResults = test values already written on the document (e.g. "Sugar: 180 mg/dL")
+- labTestsOrdered = new tests the doctor is ordering
+
+Return ONLY this JSON, no extra text, no markdown:
+${jsonSchema}
+
+If completely unreadable: {"error": "Could not read document"}`;
+
+    claudeBody = {
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    };
+  } else {
+    // ── Path B: No Vision (PDF or Vision unavailable) — Claude reads image ───
+    const contentBlocks = [];
+    for (let i = 0; i < pages.length; i++) {
+      const { data, mediaType } = pages[i];
+      if (!data || !mediaType) continue;
+      if (mediaType.startsWith('image/')) {
+        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
+      } else if (mediaType === 'application/pdf') {
+        contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } });
+      }
+      if (pages.length > 1) contentBlocks.push({ type: 'text', text: `[End of page ${i + 1}]` });
+    }
+
+    const pageLabel = pages.length === 1 ? '1 page' : `${pages.length} pages`;
+
+    const systemPrompt = `You are a precise medical document OCR reader. Extract ONLY what is explicitly written in the image.
+- Never substitute drug names with pharmacological equivalents
+- Never split continuous handwritten names into initials (e.g. "LAXMI" must not become "L.A.X.M.I")
+- Never infer, assume, or add information not visible in the document`;
+
+    const userPrompt = `Carefully read every part of this handwritten prescription. You are reading ${pageLabel}.${variationsCtx}
+
+PATIENT NAME: read as a continuous string left to right — it is an Indian name (e.g. "LAXMI BORA"). Do NOT add dots between letters or treat as initials.
+
+MEDICATIONS:
+- Copy drug names EXACTLY as written
+- Any item starting with "Blood" followed by test names goes in labTestsOrdered, NEVER medications
+- "contm"/"contin" = "continue"
+- "1gm" = 1 gram (NOT 15mg)
+- If unclear, write "[unclear: bestguess?]"
+- Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
+
+FIELDS:
+- clinicalNotes = clinical presentation on the left side of the prescription
+- recommendations = "will benefit from..." or lifestyle/treatment advice
+- existingLabResults = test values already written on document
+- labTestsOrdered = new tests being ordered
+
+Return ONLY this JSON, no extra text, no markdown:
+${jsonSchema}
+
+If completely unreadable: {"error": "Could not read document"}`;
+
+    claudeBody = {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 3000,
       system: systemPrompt,
       messages: [{ role: 'user', content: [...contentBlocks, { type: 'text', text: userPrompt }] }],
     };
+  }
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: apiHeaders, body: JSON.stringify(pass1Body),
+  let pass1Result;
+  try {
+    const resp      = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: claudeHeaders, body: JSON.stringify(claudeBody),
     });
     const apiResult = await resp.json();
-    const rawText = apiResult.content?.map(b => b.text || '').join('') || '';
+    const rawText   = apiResult.content?.map(b => b.text || '').join('') || '';
 
     try {
       pass1Result = parseJSON(rawText);
     } catch (_parseErr) {
       // Retry once: send Claude's malformed output back and ask for clean JSON
       const retryResp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST', headers: apiHeaders,
+        method: 'POST', headers: claudeHeaders,
         body: JSON.stringify({
-          ...pass1Body,
+          ...claudeBody,
           messages: [
-            ...pass1Body.messages,
+            ...claudeBody.messages,
             { role: 'assistant', content: rawText },
             { role: 'user', content: 'Return valid JSON only. No extra text, no markdown, no explanation.' },
           ],
         }),
       });
       const retryResult = await retryResp.json();
-      const retryText = retryResult.content?.map(b => b.text || '').join('') || '';
+      const retryText   = retryResult.content?.map(b => b.text || '').join('') || '';
       pass1Result = parseJSON(retryText);
     }
   } catch (e) {
@@ -174,7 +245,10 @@ If completely unreadable: {"error": "Could not read document"}`;
 
   if (pass1Result.error) return res.status(200).json(pass1Result);
 
-  // ── PASS 2: Resolve unclear medicine names (text-only) ───────────────────────
+  // Attach raw Vision text for UI debug display
+  if (visionRawText) pass1Result._visionRawText = visionRawText;
+
+  // ── PASS 2: Resolve unclear medicine names (text-only, Haiku) ────────────────
   const unclearMeds = (pass1Result.medications || []).filter(m => m.name?.startsWith('[unclear'));
   if (unclearMeds.length > 0) {
     const pass2Prompt = `Resolve illegible medicine names from an Indian prescription scan.
@@ -189,8 +263,7 @@ Return ONLY a JSON array (no markdown):
 
     try {
       const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        method: 'POST', headers: claudeHeaders,
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
@@ -219,18 +292,16 @@ Return ONLY a JSON array (no markdown):
       try {
         const date = new Date().toISOString().slice(0, 10);
 
-        // Extract medicines — skip invalid names
         const medicines = (pass1Result.medications || [])
           .map(m => ({
             canonical: m.name,
-            variation: m._originalName || m.name,   // unclear original text, or same as canonical
+            variation: m._originalName || m.name,
           }))
           .filter(m => m.canonical && m.canonical !== 'Not mentioned'
                     && !m.canonical.startsWith('[unclear')
                     && m.canonical.length > 1 && m.canonical.length < 60);
 
         if (medicines.length === 0) {
-          // Still count the document even if no medicines
           await fetch(`${redisUrl}/pipeline`, {
             method: 'POST', headers: rHeaders,
             body: JSON.stringify([['INCR', 'docs_scanned:' + date.replace(/-/g, '')]]),
@@ -238,12 +309,10 @@ Return ONLY a JSON array (no markdown):
           return;
         }
 
-        // Check current index size — cap at 500
         const scardResp = await fetch(`${redisUrl}/scard/medicines:index`, { headers: rHeaders });
         const scardData = await scardResp.json();
         const currentTotal = scardData.result || 0;
 
-        // Check which canonical names already exist in the index
         const isMemPipeline = medicines.map(m => ['SISMEMBER', 'medicines:index', m.canonical]);
         const isMemResp = await fetch(`${redisUrl}/pipeline`, {
           method: 'POST', headers: rHeaders,
@@ -251,7 +320,6 @@ Return ONLY a JSON array (no markdown):
         });
         const isMemData = await isMemResp.json();
 
-        // Build update pipeline
         const pipeline = [['INCR', 'docs_scanned:' + date.replace(/-/g, '')]];
         let newCount = 0;
 
@@ -260,17 +328,12 @@ Return ONLY a JSON array (no markdown):
           const exists = isMemData[i]?.result === 1;
 
           if (exists) {
-            // Increment seen_count and update last_seen
             pipeline.push(['HINCRBY', 'medicine:' + canonical, 'seen_count', '1']);
             pipeline.push(['HSET',    'medicine:' + canonical, 'last_seen', date]);
-            // Add variation if different from canonical (will be deduplicated later on read)
             if (variation !== canonical) {
-              // Append variation if not already present — we store as pipe-separated string
-              // Use a script-free approach: always append; dedup happens on read
-              pipeline.push(['HGET', 'medicine:' + canonical, 'variations']); // placeholder — handled below
+              pipeline.push(['HGET', 'medicine:' + canonical, 'variations']); // placeholder
             }
           } else if (currentTotal + newCount < 500) {
-            // New medicine — create HASH entry and add to index
             pipeline.push(['SADD', 'medicines:index', canonical]);
             pipeline.push(['HSET', 'medicine:' + canonical,
               'canonical',  canonical,
@@ -287,7 +350,6 @@ Return ONLY a JSON array (no markdown):
           body: JSON.stringify(pipeline.filter(cmd => cmd[0] !== 'HGET')),
         });
 
-        // Append new variations for existing medicines (separate pass — read then write)
         const existingWithVariations = medicines.filter((m, i) =>
           isMemData[i]?.result === 1 && m.variation !== m.canonical
         );
@@ -303,7 +365,7 @@ Return ONLY a JSON array (no markdown):
             .map((m, i) => {
               const existing = getVarData[i]?.result || m.canonical;
               const parts = existing.split('|').map(s => s.trim());
-              if (parts.includes(m.variation)) return null; // already recorded
+              if (parts.includes(m.variation)) return null;
               return ['HSET', 'medicine:' + m.canonical, 'variations', existing + '|' + m.variation];
             })
             .filter(Boolean);
@@ -315,7 +377,7 @@ Return ONLY a JSON array (no markdown):
             });
           }
         }
-      } catch (_) { /* fire-and-forget — ignore errors */ }
+      } catch (_) { /* fire-and-forget */ }
     })();
   }
 
