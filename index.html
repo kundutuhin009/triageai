@@ -1423,6 +1423,13 @@ ${stepsText}
       waText += `📊 *Diagnosis:* ${data.diagnosis}\n\n`;
     }
 
+    // ── Clinical Notes ────────────────────────────────────────────────────────
+    const clinicalNotes = data.clinicalNotes || data.rawNotes;
+    if (clinicalNotes) {
+      html += `<details class="rx-raw-notes"><summary>📄 Clinical Notes</summary><div class="rx-raw-notes-body">${clinicalNotes}</div></details>`;
+      waText += `📄 *Clinical Notes:* ${clinicalNotes}\n\n`;
+    }
+
     // ── Medications ───────────────────────────────────────────────────────────
     const meds = data.medications || [];
     if (meds.length) {
@@ -1446,19 +1453,6 @@ ${stepsText}
       });
     }
 
-    // ── Existing Lab Results (values already on the document) ────────────────
-    const existingLabs = (data.existingLabResults || []).filter(t => t && t.test);
-    if (existingLabs.length) {
-      html += '<div class="rx-section-label" style="color:#0277bd">🧪 Lab Results (on record)</div>';
-      html += '<div class="rx-lab-list">';
-      existingLabs.forEach(t => {
-        html += `<div class="rx-lab-item"><span>📊</span><span class="lab-name">${t.test}</span><span class="lab-result">${t.value || ''}</span></div>`;
-        waText += `📊 *${t.test}*: ${t.value || ''}\n`;
-      });
-      html += '</div>';
-      waText += '\n';
-    }
-
     // ── Lab Tests Ordered (new tests the doctor is ordering) ─────────────────
     const orderedLabs = (data.labTestsOrdered || []).filter(Boolean);
     if (orderedLabs.length) {
@@ -1468,6 +1462,19 @@ ${stepsText}
         const name = typeof t === 'string' ? t : (t.test || t.name || JSON.stringify(t));
         html += `<div class="rx-lab-item"><span>🔬</span><span class="lab-name">${name}</span></div>`;
         waText += `🔬 ${name}\n`;
+      });
+      html += '</div>';
+      waText += '\n';
+    }
+
+    // ── Existing Lab Results (values already on the document) ────────────────
+    const existingLabs = (data.existingLabResults || []).filter(t => t && t.test);
+    if (existingLabs.length) {
+      html += '<div class="rx-section-label" style="color:#0277bd">🧪 Lab Results (on record)</div>';
+      html += '<div class="rx-lab-list">';
+      existingLabs.forEach(t => {
+        html += `<div class="rx-lab-item"><span>📊</span><span class="lab-name">${t.test}</span><span class="lab-result">${t.value || ''}</span></div>`;
+        waText += `📊 *${t.test}*: ${t.value || ''}\n`;
       });
       html += '</div>';
       waText += '\n';
@@ -1483,12 +1490,6 @@ ${stepsText}
     if (data.followUp) {
       html += `<div class="rx-notes">🔁 <strong>Follow-up:</strong> ${data.followUp}</div>`;
       waText += `🔁 *Follow-up:* ${data.followUp}\n\n`;
-    }
-
-    // ── Raw Notes (collapsible) ───────────────────────────────────────────────
-    if (data.rawNotes) {
-      html += `<details class="rx-raw-notes"><summary>📄 Raw / Unstructured Notes</summary><div class="rx-raw-notes-body">${data.rawNotes}</div></details>`;
-      waText += `📄 *Notes:* ${data.rawNotes}\n\n`;
     }
 
     waText += '⚠️ Always verify with your doctor or pharmacist before acting on this.\n';
