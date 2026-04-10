@@ -128,6 +128,37 @@ export default async function handler(req, res) {
 
   let claudeBody;
 
+  // ── Shared rules injected into both prompt paths ────────────────────────────
+  const sharedRules = `
+PATIENT NAME: read as a continuous string left to right — Indian name (e.g. "LAXMI BORA"). No dots between letters, never split into initials.
+
+BLOOD (F) — HARD RULE:
+- Any item containing "Blood (F)" is ALWAYS a lab test order — NEVER a medication under any circumstance
+- Put it in labTestsOrdered along with all sub-tests listed after it (Sugar, HbA1c, Uric Acid, Creatinin, etc.)
+- If OCR partially extracted sub-tests, include what you can see; mark genuinely unclear ones as "[unclear: ...]"
+- Common sub-tests to watch for: Sugar / Fasting Glucose, HbA1c, Uric Acid, Creatinin, Pre-op Serology
+
+PYRIGESIC:
+- "Pyrigesic" (also: Pyricosic, Pyricoxib, Pyrigosic) is a brand-name painkiller (Paracetamol 1gm) — always write as "Pyrigesic"
+- "1gm" = 1 gram — NEVER interpret as 15mg or 15gm — medically critical distinction
+- "SOS" = as needed; "3 times" = frequency is "3 times daily"
+
+PRE-OP SEROLOGY:
+- "Art-op Smology", "pre-op serology", or similar OCR garbling = "Pre-op Serology"
+- Sub-tests: HepSAg, HepCAb — include both if serology is mentioned
+
+MEDICATIONS (general):
+- Copy drug names EXACTLY as written — never substitute with pharmacological equivalents
+- "contm" or "contin" = "continue"
+- If unclear, write "[unclear: bestguess?]"
+- Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
+
+FIELDS:
+- clinicalNotes = clinical presentation on the left side of the prescription (symptoms, history, examination findings)
+- recommendations = "will benefit from..." or lifestyle/treatment advice; "to" means "to" (e.g. "injection to CMCJ")
+- existingLabResults = test values already written on the document (e.g. "Sugar: 180 mg/dL")
+- labTestsOrdered = new tests the doctor is ordering`;
+
   if (visionRawText) {
     // ── Path A: Vision succeeded — send text only to Claude ──────────────────
     const systemPrompt = `You are a medical prescription parser. You receive raw OCR text extracted by Google Vision from an Indian handwritten prescription. Your job is to parse it into structured data accurately.`;
@@ -137,17 +168,7 @@ export default async function handler(req, res) {
 ${visionRawText}
 """
 ${variationsCtx}
-Rules:
-- Patient name is a continuous Indian name (e.g. "LAXMI BORA", "RAHUL SHARMA") — not initials, no dots between letters
-- "contm" or "contin" = "continue"
-- "1gm" = 1 gram (NOT 15mg) — medically critical distinction
-- Any item starting with "Blood" followed by test names (Sugar, HbA1c, CBC, etc.) is ALWAYS a lab test order — put it in labTestsOrdered, NEVER in medications
-- Copy drug names EXACTLY as written — do not substitute with pharmacological equivalents
-- If a drug name is unclear, write "[unclear: bestguess?]"
-- clinicalNotes = clinical presentation on the left side (symptoms, history, examination findings)
-- recommendations = "will benefit from..." or lifestyle/treatment advice
-- existingLabResults = test values already written on the document (e.g. "Sugar: 180 mg/dL")
-- labTestsOrdered = new tests the doctor is ordering
+${sharedRules}
 
 Return ONLY this JSON, no extra text, no markdown:
 ${jsonSchema}
@@ -182,22 +203,7 @@ If completely unreadable: {"error": "Could not read document"}`;
 - Never infer, assume, or add information not visible in the document`;
 
     const userPrompt = `Carefully read every part of this handwritten prescription. You are reading ${pageLabel}.${variationsCtx}
-
-PATIENT NAME: read as a continuous string left to right — it is an Indian name (e.g. "LAXMI BORA"). Do NOT add dots between letters or treat as initials.
-
-MEDICATIONS:
-- Copy drug names EXACTLY as written
-- Any item starting with "Blood" followed by test names goes in labTestsOrdered, NEVER medications
-- "contm"/"contin" = "continue"
-- "1gm" = 1 gram (NOT 15mg)
-- If unclear, write "[unclear: bestguess?]"
-- Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
-
-FIELDS:
-- clinicalNotes = clinical presentation on the left side of the prescription
-- recommendations = "will benefit from..." or lifestyle/treatment advice
-- existingLabResults = test values already written on document
-- labTestsOrdered = new tests being ordered
+${sharedRules}
 
 Return ONLY this JSON, no extra text, no markdown:
 ${jsonSchema}
