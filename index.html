@@ -360,6 +360,47 @@
   .rx-doc-type-badge.unknown         { background: var(--bg);  color: var(--ink-muted); border: 1.5px solid var(--border); }
   .rx-pass2-note { font-size: 11px; color: var(--ink-muted); margin-bottom: 10px; font-style: italic; }
 
+  /* ── PRESCRIPTION RESULT — new structured layout ── */
+  .rx-section-label { font-size: 10px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .rx-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .rx-patient-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .rx-patient-chip { background: var(--bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+  .rx-patient-chip .chip-label { font-size: 10px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px; }
+  .rx-patient-chip .chip-val { font-size: 13px; color: var(--ink); font-weight: 600; }
+  .rx-header-info { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .rx-header-pill { font-size: 12px; font-weight: 600; color: var(--ink-muted); background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius-pill); padding: 5px 12px; }
+  .rx-highlight-box { border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+  .rx-highlight-box.teal { background: linear-gradient(135deg, #e0f7f4, #f0faf8); border: 1.5px solid #80cbc4; }
+  .rx-highlight-box.amber { background: #fff8e1; border: 1.5px solid #ffe082; }
+  .rx-highlight-box .box-label { font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .rx-highlight-box.teal .box-label { color: var(--primary); }
+  .rx-highlight-box.amber .box-label { color: #e65100; }
+  .rx-highlight-box .box-val { font-size: 14px; line-height: 1.6; font-weight: 500; }
+  .rx-highlight-box.teal .box-val { color: var(--ink); }
+  .rx-highlight-box.amber .box-val { color: #4a3000; }
+  .rx-med-card { background: var(--bg); border: 1.5px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; transition: all 0.2s; }
+  .rx-med-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,137,123,0.08); }
+  .rx-med-card.unclear { border-color: #ffe082; background: #fffde7; }
+  .rx-med-name { font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; color: var(--ink); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rx-med-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rx-med-pill { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-pill); }
+  .rx-med-pill.dosage { background: #e3f2fd; color: #0d47a1; }
+  .rx-med-pill.freq { background: #e8f5e9; color: #1b5e20; }
+  .rx-med-pill.instr { background: var(--primary-light); color: var(--primary-dark); }
+  .rx-lab-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .rx-lab-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg); border-radius: 10px; border: 1.5px solid var(--border); font-size: 13px; line-height: 1.5; }
+  .rx-lab-item.abnormal { border-color: #ef9a9a; background: #fff5f5; }
+  .rx-lab-item .lab-name { font-weight: 700; color: var(--ink); flex: 1; }
+  .rx-lab-item .lab-result { font-size: 12px; color: var(--ink-muted); }
+  .rx-lab-item.abnormal .lab-result { color: var(--red-result); font-weight: 600; }
+  .rx-raw-notes { margin-top: 4px; margin-bottom: 14px; }
+  .rx-raw-notes summary { font-size: 12px; font-weight: 700; color: var(--ink-muted); cursor: pointer; padding: 8px 14px; background: var(--bg); border-radius: 10px; border: 1.5px solid var(--border); list-style: none; user-select: none; }
+  .rx-raw-notes summary::-webkit-details-marker { display: none; }
+  .rx-raw-notes summary::after { content: ' ▾'; font-size: 10px; }
+  .rx-raw-notes[open] summary { border-radius: 10px 10px 0 0; }
+  .rx-raw-notes[open] summary::after { content: ' ▴'; }
+  .rx-raw-notes-body { font-size: 13px; color: var(--ink-muted); line-height: 1.7; padding: 12px 14px; background: var(--bg); border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; white-space: pre-wrap; }
+
   /* ── FOOTER ── */
   footer { background: linear-gradient(135deg, #004d40, #00695c); padding: 32px 40px; text-align: center; margin-top: auto; }
   .footer-text { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 1.5px; text-transform: uppercase; line-height: 2.2; }
@@ -1324,7 +1365,7 @@ ${stepsText}
   function rxShowResult(data) {
     let html = '';
     let waText = '';
-    const type = data.document_type || 'prescription';
+    const type = data.document_type || 'unknown';
 
     const typeLabels = {
       prescription:      { icon: '💊', label: 'Prescription' },
@@ -1336,122 +1377,116 @@ ${stepsText}
     const typeMeta = typeLabels[type] || typeLabels.unknown;
     const typeLabel = typeMeta.icon + ' ' + typeMeta.label;
 
-    // Show type badge
     document.getElementById('rxDocTypeBadge').innerHTML =
       '<span class="rx-doc-type-badge ' + type + '">' + typeLabel + '</span>';
 
-    // Show pass-2 note if any unclear items were present
-    const hadUnclear = (data.medicines || []).some(m => m.unclear);
+    const hadUnclear = (data.medications || []).some(m => m.unclear);
     document.getElementById('rxPass2Note').innerHTML = hadUnclear
-      ? '<div class="rx-pass2-note">⚠️ Some items were unclear. AI has made best-guess resolutions — please verify.</div>'
+      ? '<div class="rx-pass2-note">⚠️ Some items were unclear — AI made best-guess resolutions. Please verify.</div>'
       : '';
 
     waText = typeLabel + '\n_(via TriageAI Medical Document Reader)_\n\n';
 
-    // PRESCRIPTION
-    if (type === 'prescription') {
-      (data.medicines || []).forEach((m, i) => {
-        const unclearBorder = m.unclear ? 'border-color:#ffe082;' : '';
-        html += `<div class="rx-medicine" style="${unclearBorder}">
-          <div class="rx-medicine-name">💊 ${m.name}${m.unclear ? ' <span style="font-size:13px;color:var(--amber)">⚠️ Unclear</span>' : ''}</div>
-          <div class="rx-rows">
-            ${m.generic ? `<div class="rx-row"><span class="rx-row-icon">🔬</span><span class="rx-row-label">Generic</span><span class="rx-row-val">${m.generic}</span></div>` : ''}
-            ${m.dosage ? `<div class="rx-row"><span class="rx-row-icon">📏</span><span class="rx-row-label">Dosage</span><span class="rx-row-val">${m.dosage}</span></div>` : ''}
-            ${m.frequency ? `<div class="rx-row"><span class="rx-row-icon">⏰</span><span class="rx-row-label">Frequency</span><span class="rx-row-val">${m.frequency}</span></div>` : ''}
-            ${m.duration ? `<div class="rx-row"><span class="rx-row-icon">📅</span><span class="rx-row-label">Duration</span><span class="rx-row-val">${m.duration}</span></div>` : ''}
-            ${m.purpose ? `<div class="rx-row"><span class="rx-row-icon">🎯</span><span class="rx-row-label">Purpose</span><span class="rx-row-val">${m.purpose}</span></div>` : ''}
-            ${m.warnings ? `<div class="rx-row rx-warning-row"><span class="rx-row-icon">⚠️</span><span class="rx-row-label">Warning</span><span class="rx-row-val">${m.warnings}</span></div>` : ''}
-          </div>
-        </div>`;
-        waText += `*${i+1}. ${m.name}*${m.unclear ? ' ⚠️ Unclear' : ''}\n`;
-        if (m.generic) waText += `🔬 Generic: ${m.generic}\n`;
-        if (m.dosage) waText += `📏 Dosage: ${m.dosage}\n`;
-        if (m.frequency) waText += `⏰ Frequency: ${m.frequency}\n`;
-        if (m.duration) waText += `📅 Duration: ${m.duration}\n`;
-        if (m.purpose) waText += `🎯 For: ${m.purpose}\n`;
-        if (m.warnings) waText += `⚠️ Warning: ${m.warnings}\n`;
-        waText += '\n';
-      });
-    }
-
-    // CLINICAL NOTE
-    if (type === 'clinical_note' && data.clinical) {
-      const c = data.clinical;
-      const fields = [
-        ['👤', 'Patient', c.patient],
-        ['🔍', 'Chief Complaint', c.chief_complaint],
-        ['📋', 'Examination', c.examination],
-        ['📊', 'Diagnosis', c.diagnosis],
-        ['📝', "Doctor's Plan", c.plan],
-      ];
-      html += `<div class="rx-medicine">`;
-      fields.forEach(([icon, label, val]) => {
-        if (val) {
-          html += `<div class="rx-row" style="margin-bottom:8px"><span class="rx-row-icon">${icon}</span><span class="rx-row-label">${label}</span><span class="rx-row-val">${val}</span></div>`;
-          waText += `${icon} *${label}:* ${val}\n`;
-        }
-      });
-      if (c.tests_recommended?.length) {
-        const tests = c.tests_recommended.join(', ');
-        html += `<div class="rx-row" style="margin-bottom:8px"><span class="rx-row-icon">🔬</span><span class="rx-row-label">Tests</span><span class="rx-row-val">${tests}</span></div>`;
-        waText += `🔬 *Tests:* ${tests}\n`;
-      }
-      html += `</div>`;
-      waText += '\n';
-    }
-
-    // LAB REPORT
-    if (type === 'lab_report') {
-      (data.lab_tests || []).forEach(t => {
-        const abnormalStyle = t.abnormal ? 'border-color:#ffcdd2;' : '';
-        html += `<div class="rx-medicine" style="${abnormalStyle}">
-          <div class="rx-medicine-name">🧪 ${t.name}${t.abnormal ? ' <span style="font-size:13px;color:var(--red)">⚠️ Abnormal</span>' : ' <span style="font-size:13px;color:var(--green)">✅ Normal</span>'}</div>
-          <div class="rx-rows">
-            <div class="rx-row"><span class="rx-row-icon">📊</span><span class="rx-row-label">Result</span><span class="rx-row-val" style="${t.abnormal ? 'color:var(--red);font-weight:600' : ''}">${t.result}</span></div>
-            ${t.normal_range ? `<div class="rx-row"><span class="rx-row-icon">✅</span><span class="rx-row-label">Normal</span><span class="rx-row-val">${t.normal_range}</span></div>` : ''}
-            ${t.meaning ? `<div class="rx-row"><span class="rx-row-icon">💡</span><span class="rx-row-label">Meaning</span><span class="rx-row-val">${t.meaning}</span></div>` : ''}
-          </div>
-        </div>`;
-        waText += `🧪 *${t.name}*${t.abnormal ? ' ⚠️ Abnormal' : ' ✅ Normal'}\n`;
-        waText += `📊 Result: ${t.result}\n`;
-        if (t.normal_range) waText += `✅ Normal range: ${t.normal_range}\n`;
-        if (t.meaning) waText += `💡 Meaning: ${t.meaning}\n`;
-        waText += '\n';
-      });
-    }
-
-    // DISCHARGE SUMMARY
-    if (type === 'discharge_summary' && data.discharge) {
-      const d = data.discharge;
-      const fields = [
-        ['📅', 'Admitted', d.admission_date],
-        ['🏁', 'Discharged', d.discharge_date],
-        ['📊', 'Diagnosis', d.diagnosis],
-        ['💊', 'Treatment', d.treatment_summary],
-        ['🔴', 'Discharge Meds', d.discharge_medicines],
-        ['🔄', 'Follow-up', d.follow_up],
-      ];
-      html += '<div class="rx-medicine">';
-      fields.forEach(([icon, label, val]) => {
-        if (val && val !== 'Not mentioned') {
-          html += '<div class="rx-row" style="margin-bottom:8px"><span class="rx-row-icon">' + icon + '</span><span class="rx-row-label">' + label + '</span><span class="rx-row-val">' + val + '</span></div>';
-          waText += icon + ' *' + label + ':* ' + val + '\n';
-        }
+    // ── Patient details chips ─────────────────────────────────────────────────
+    const pd = data.patientDetails || {};
+    const pdFields = [
+      ['👤', 'Patient', pd.name],
+      ['🎂', 'Age', pd.age],
+      ['⚧', 'Sex', pd.sex],
+      ['📅', 'Date', pd.date],
+    ].filter(([, , v]) => v);
+    if (pdFields.length) {
+      html += '<div class="rx-patient-chips">';
+      pdFields.forEach(([icon, label, val]) => {
+        html += `<div class="rx-patient-chip"><span class="chip-label">${label}</span><span class="chip-val">${icon} ${val}</span></div>`;
+        waText += `${icon} ${label}: ${val}\n`;
       });
       html += '</div>';
       waText += '\n';
     }
 
-    // Shared footer fields
-    if (data.doctor_notes) {
-      html += `<div class="rx-notes">📝 <strong>Notes:</strong> ${data.doctor_notes}</div>`;
-      waText += `📝 *Notes:* ${data.doctor_notes}\n\n`;
-    }
-    if (data.follow_up) {
-      html += `<div class="rx-notes" style="margin-top:8px">🔁 <strong>Follow-up:</strong> ${data.follow_up}</div>`;
-      waText += `🔁 *Follow-up:* ${data.follow_up}\n\n`;
+    // ── Doctor / Clinic pills ─────────────────────────────────────────────────
+    const headerPills = [
+      data.doctor  ? '🩺 ' + data.doctor  : null,
+      data.clinic  ? '🏥 ' + data.clinic  : null,
+    ].filter(Boolean);
+    if (headerPills.length) {
+      html += '<div class="rx-header-info">';
+      headerPills.forEach(p => { html += `<span class="rx-header-pill">${p}</span>`; });
+      html += '</div>';
+      waText += headerPills.join(' · ') + '\n\n';
     }
 
+    // ── Diagnosis ─────────────────────────────────────────────────────────────
+    if (data.diagnosis) {
+      html += `<div class="rx-highlight-box teal"><div class="box-label">📊 Diagnosis</div><div class="box-val">${data.diagnosis}</div></div>`;
+      waText += `📊 *Diagnosis:* ${data.diagnosis}\n\n`;
+    }
+
+    // ── Medications ───────────────────────────────────────────────────────────
+    const meds = data.medications || [];
+    if (meds.length) {
+      html += '<div class="rx-section-label" style="color:var(--primary)">💊 Medications</div>';
+      meds.forEach((m, i) => {
+        const unclearClass = m.unclear ? ' unclear' : '';
+        html += `<div class="rx-med-card${unclearClass}">`;
+        html += `<div class="rx-med-name">💊 ${m.name}${m.unclear ? ' <span style="font-size:12px;color:#f59e0b">⚠️ Unclear</span>' : ''}</div>`;
+        html += '<div class="rx-med-pills">';
+        if (m.dosage)       html += `<span class="rx-med-pill dosage">📏 ${m.dosage}</span>`;
+        if (m.frequency)    html += `<span class="rx-med-pill freq">⏰ ${m.frequency}</span>`;
+        if (m.instructions) html += `<span class="rx-med-pill instr">📋 ${m.instructions}</span>`;
+        html += '</div></div>';
+
+        waText += `*${i+1}. ${m.name}*${m.unclear ? ' ⚠️' : ''}\n`;
+        if (m.dosage)       waText += `📏 ${m.dosage}  `;
+        if (m.frequency)    waText += `⏰ ${m.frequency}  `;
+        if (m.instructions) waText += `📋 ${m.instructions}`;
+        waText += '\n\n';
+      });
+    }
+
+    // ── Lab Tests ─────────────────────────────────────────────────────────────
+    const labs = (data.labTests || []).filter(t => t && t.name);
+    if (labs.length) {
+      html += '<div class="rx-section-label" style="color:#0277bd">🧪 Lab Tests / Results</div>';
+      html += '<div class="rx-lab-list">';
+      labs.forEach(t => {
+        const abnClass = t.abnormal ? ' abnormal' : '';
+        html += `<div class="rx-lab-item${abnClass}">`;
+        html += `<span>${t.abnormal ? '⚠️' : '✅'}</span>`;
+        html += `<span class="lab-name">${t.name}</span>`;
+        if (t.result) html += `<span class="lab-result">${t.result}${t.normalRange ? ' (ref: ' + t.normalRange + ')' : ''}</span>`;
+        html += '</div>';
+        if (t.meaning) html += `<div style="font-size:12px;color:var(--ink-muted);padding:2px 14px 8px 38px">${t.meaning}</div>`;
+
+        waText += `${t.abnormal ? '⚠️' : '✅'} *${t.name}*`;
+        if (t.result) waText += `: ${t.result}`;
+        if (t.normalRange) waText += ` (ref: ${t.normalRange})`;
+        waText += '\n';
+      });
+      html += '</div>';
+      waText += '\n';
+    }
+
+    // ── Recommendations ───────────────────────────────────────────────────────
+    if (data.recommendations) {
+      html += `<div class="rx-highlight-box amber"><div class="box-label">📝 Recommendations</div><div class="box-val">${data.recommendations}</div></div>`;
+      waText += `📝 *Recommendations:* ${data.recommendations}\n\n`;
+    }
+
+    // ── Follow-up ─────────────────────────────────────────────────────────────
+    if (data.followUp) {
+      html += `<div class="rx-notes">🔁 <strong>Follow-up:</strong> ${data.followUp}</div>`;
+      waText += `🔁 *Follow-up:* ${data.followUp}\n\n`;
+    }
+
+    // ── Raw Notes (collapsible) ───────────────────────────────────────────────
+    if (data.rawNotes) {
+      html += `<details class="rx-raw-notes"><summary>📄 Raw / Unstructured Notes</summary><div class="rx-raw-notes-body">${data.rawNotes}</div></details>`;
+      waText += `📄 *Notes:* ${data.rawNotes}\n\n`;
+    }
+
+    waText += '⚠️ Always verify with your doctor or pharmacist before acting on this.\n';
     waText += 'Generated by TriageAI — triageai-omega.vercel.app';
 
     document.getElementById('rxMedicineList').innerHTML = html;

@@ -80,64 +80,52 @@ export default async function handler(req, res) {
   const pageLabel = pages.length === 1 ? '1 page' : `${pages.length} pages`;
 
   // ── PASS 1: Full document read ───────────────────────────────────────────────
-  const pass1Prompt = `You are an expert medical document interpreter specialising in Indian healthcare. You are reading ${pageLabel} of a medical document.${variationsCtx}
+  const pass1Prompt = `You are a medical document reader. Analyze the uploaded prescription or medical document image carefully — including all handwritten text. You are reading ${pageLabel}.${variationsCtx}
 
-Step 1 — Identify document type: prescription, clinical_note, lab_report, discharge_summary, or unknown.
-Step 2 — Extract ALL visible text from ALL pages. Cross-reference with common Indian brands for unclear items.
+Abbreviations to decode: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed, Stat=Immediately, x5/7=5 days, x1/52=1 week, x1/12=1 month.
 
-Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed, Stat=Immediately, x5/7=5 days, x1/52=1 week, x1/12=1 month.
+Common Indian medicine brands: Crocin, Dolo, Pan, Augmentin, Azithral, Metformin, Glycomet, Telma, Ecosprin, Shelcal, Combiflam, Allegra, Montair, Omez, Pantop, Taxim, Zifi, Mox, Cifran, Amoxyclav, Atorva, Telmisartan, Cetrizine, Sinarest, Wikoryl, Zerodol, Aciloc, Ranitidine, Sorbitrate.
 
-Common Indian medicine reference: Crocin, Dolo, Pan, Augmentin, Azithral, Metformin, Glycomet, Telma, Ecosprin, Shelcal, Combiflam, Allegra, Montair, Omez, Pantop, Taxim, Zifi, Mox, Cifran, Amoxyclav, Atorva, Telmisartan, Cetrizine, Sinarest, Wikoryl, Zerodol, Aciloc, Ranitidine, Sorbitrate.
-
-For unclear/illegible items: give your best guess and mark unclear:true. NEVER leave name empty.
-
-Respond ONLY in this exact JSON (no markdown, no explanation):
+Extract and return ONLY this JSON object (no markdown, no explanation):
 {
   "document_type": "prescription" | "clinical_note" | "lab_report" | "discharge_summary" | "unknown",
-  "medicines": [
+  "patientDetails": {
+    "name": null,
+    "age": null,
+    "sex": null,
+    "date": null
+  },
+  "doctor": null,
+  "clinic": null,
+  "diagnosis": null,
+  "medications": [
     {
       "name": "Brand name as written",
-      "generic": "Generic/chemical name",
       "dosage": "e.g. 500mg",
       "frequency": "Plain English decoded from abbreviation",
-      "duration": "e.g. 5 days or Not mentioned",
-      "purpose": "What this medicine treats",
-      "warnings": "Key warnings or Not mentioned",
-      "unclear": true or false
+      "instructions": "Duration, timing, or special instructions",
+      "unclear": false
     }
   ],
-  "clinical": {
-    "patient": "Name/age/gender if visible or Not mentioned",
-    "chief_complaint": "Main complaint",
-    "examination": "Examination findings",
-    "diagnosis": "Diagnosis or differential",
-    "tests_recommended": ["test 1", "test 2"],
-    "plan": "Treatment plan"
-  },
-  "lab_tests": [
+  "labTests": [
     {
       "name": "Test name",
-      "result": "Result with unit",
-      "normal_range": "Normal range or Not mentioned",
-      "abnormal": true or false,
+      "result": "Result with unit or null if not a report",
+      "normalRange": "Normal range or null",
+      "abnormal": false,
       "meaning": "Plain English explanation"
     }
   ],
-  "discharge": {
-    "admission_date": "Date or Not mentioned",
-    "discharge_date": "Date or Not mentioned",
-    "diagnosis": "Final diagnosis",
-    "treatment_summary": "Treatment received during admission",
-    "discharge_medicines": "Medicines prescribed on discharge",
-    "follow_up": "Follow-up instructions"
-  },
-  "doctor_notes": "General instructions or Not mentioned",
-  "follow_up": "Follow-up or Not mentioned"
+  "recommendations": null,
+  "followUp": null,
+  "rawNotes": null
 }
 
 Rules:
-- Populate ONLY the section matching document_type; leave others as [] or null.
-- Always append to doctor_notes: "⚠️ Please verify with your doctor or pharmacist before acting on this."
+- Read ALL handwritten text carefully — do not skip any medicine or instruction
+- For unclear/illegible medicines: give your best guess and mark unclear:true. NEVER leave name empty.
+- If a field is not visible in the document, use null
+- Put any unstructured instructions, advice, or unclassified text in rawNotes
 - If completely unreadable: {"error": "Could not read document"}`;
 
   let pass1Result;
@@ -161,17 +149,17 @@ Rules:
   if (pass1Result.error) return res.status(200).json(pass1Result);
 
   // ── PASS 2: Resolve unclear medicine names (text-only) ───────────────────────
-  const unclearMeds = (pass1Result.medicines || []).filter(m => m.unclear);
+  const unclearMeds = (pass1Result.medications || []).filter(m => m.unclear);
   if (unclearMeds.length > 0) {
     const pass2Prompt = `Resolve illegible medicine names from an Indian prescription scan.
 
 Unclear items:
-${unclearMeds.map((m, i) => `${i + 1}. Written as: "${m.name}" | Dosage: "${m.dosage || '?'}" | Frequency: "${m.frequency || '?'}" | Purpose: "${m.purpose || '?'}"`).join('\n')}
+${unclearMeds.map((m, i) => `${i + 1}. Written as: "${m.name}" | Dosage: "${m.dosage || '?'}" | Frequency: "${m.frequency || '?'}"`).join('\n')}
 
 Using your knowledge of Indian prescription medicines (brands and generics), resolve each to the most likely correct name.
 
 Return ONLY a JSON array (no markdown):
-[{"original":"as written","resolved":"best guess","generic":"generic name","confidence":"high|medium|low"}]`;
+[{"original":"as written","resolved":"best guess","confidence":"high|medium|low"}]`;
 
     try {
       const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
@@ -183,16 +171,15 @@ Return ONLY a JSON array (no markdown):
           messages: [{ role: 'user', content: pass2Prompt }],
         }),
       });
-      const r2   = await resp2.json();
+      const r2    = await resp2.json();
       const text2 = r2.content?.map(b => b.text || '').join('') || '';
       const resolutions = JSON.parse(text2.replace(/```json\n?|```/g, '').trim());
       if (Array.isArray(resolutions)) {
-        pass1Result.medicines = (pass1Result.medicines || []).map(m => {
+        pass1Result.medications = (pass1Result.medications || []).map(m => {
           if (!m.unclear) return m;
           const fix = resolutions.find(r => r.original === m.name);
           if (fix && fix.confidence !== 'low') {
-            // Keep _originalName so we can store it as a variation
-            return { ...m, name: fix.resolved, generic: fix.generic || m.generic, unclear: false, _originalName: m.name };
+            return { ...m, name: fix.resolved, unclear: false, _originalName: m.name };
           }
           return m;
         });
@@ -207,7 +194,7 @@ Return ONLY a JSON array (no markdown):
         const date = new Date().toISOString().slice(0, 10);
 
         // Extract medicines — skip invalid names
-        const medicines = (pass1Result.medicines || [])
+        const medicines = (pass1Result.medications || [])
           .map(m => ({
             canonical: m.name,
             variation: m._originalName || m.name,   // unclear original text, or same as canonical
