@@ -80,16 +80,31 @@ export default async function handler(req, res) {
   const pageLabel = pages.length === 1 ? '1 page' : `${pages.length} pages`;
 
   // ── PASS 1: Full document read ───────────────────────────────────────────────
-  const systemPrompt = `You are a precise medical document OCR reader. Your job is to extract ONLY what is explicitly written in the image. Do NOT infer, assume, or add any information not visible in the document.`;
+  const systemPrompt = `You are a precise medical document OCR reader. Extract ONLY what is explicitly written in the image.
+- Never substitute drug names with pharmacological equivalents (e.g. if written "Ostoshine", do NOT write "Ossein Hydroxyapatite")
+- Never split continuous handwritten names into initials (e.g. "LAXMI" must not become "L.A.X.M.I" or "L.X.M")
+- Never infer, assume, or add information not visible in the document`;
 
   const userPrompt = `Carefully read every part of this handwritten prescription image. You are reading ${pageLabel}.${variationsCtx}
 
-Important rules:
-- Extract ONLY medications explicitly written in the prescription. Do not guess drug names.
-- If handwriting is unclear, write your best attempt in brackets e.g. "[unclear: Ostoshine?]"
-- Distinguish between EXISTING lab results (values already written) vs NEW tests being ordered
-- Do not hallucinate drug names from medical knowledge — only extract what is written
+PATIENT NAME rules (critical):
+- Read the full name as a single continuous string, left to right
+- It is a person's name, likely Indian — common patterns: first name + surname (e.g. "LAXMI BORA", "RAHUL SHARMA")
+- Do NOT interpret letters as initials or abbreviations
+- Do NOT add dots between letters
+- If genuinely unclear, write your best attempt as a full name, not initials
+
+MEDICATION rules:
+- Copy the handwritten drug name EXACTLY as written — do not replace with pharmacological equivalents
+- If unclear, write "[unclear: bestguess?]" — never omit or substitute
+- Blood test orders (e.g. "Blood (F): Sugar, HbA1c") go in labTestsOrdered, NOT medications
 - Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
+
+FIELD MAPPING rules:
+- clinicalNotes = clinical presentation written on the left side of the prescription (symptoms, history, examination findings)
+- recommendations = text starting with "will benefit from..." or advice the doctor writes about lifestyle/treatment approach
+- existingLabResults = test values already written on the document (e.g. "Sugar: 180 mg/dL")
+- labTestsOrdered = new tests the doctor is ordering
 
 Return ONLY this JSON, no extra text, no markdown:
 {
@@ -98,6 +113,7 @@ Return ONLY this JSON, no extra text, no markdown:
   "doctor": null,
   "clinic": null,
   "diagnosis": null,
+  "clinicalNotes": null,
   "medications": [
     { "name": "", "dosage": null, "frequency": null, "instructions": null }
   ],
@@ -106,8 +122,7 @@ Return ONLY this JSON, no extra text, no markdown:
   ],
   "labTestsOrdered": [],
   "recommendations": null,
-  "followUp": null,
-  "rawNotes": null
+  "followUp": null
 }
 
 If completely unreadable: {"error": "Could not read document"}`;
