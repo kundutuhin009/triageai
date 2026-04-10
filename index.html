@@ -1380,7 +1380,7 @@ ${stepsText}
     document.getElementById('rxDocTypeBadge').innerHTML =
       '<span class="rx-doc-type-badge ' + type + '">' + typeLabel + '</span>';
 
-    const hadUnclear = (data.medications || []).some(m => m.unclear);
+    const hadUnclear = (data.medications || []).some(m => m._originalName || m.name?.startsWith('[unclear'));
     document.getElementById('rxPass2Note').innerHTML = hadUnclear
       ? '<div class="rx-pass2-note">⚠️ Some items were unclear — AI made best-guess resolutions. Please verify.</div>'
       : '';
@@ -1428,9 +1428,10 @@ ${stepsText}
     if (meds.length) {
       html += '<div class="rx-section-label" style="color:var(--primary)">💊 Medications</div>';
       meds.forEach((m, i) => {
-        const unclearClass = m.unclear ? ' unclear' : '';
+        const isUnclear = m._originalName || m.name?.startsWith('[unclear');
+        const unclearClass = isUnclear ? ' unclear' : '';
         html += `<div class="rx-med-card${unclearClass}">`;
-        html += `<div class="rx-med-name">💊 ${m.name}${m.unclear ? ' <span style="font-size:12px;color:#f59e0b">⚠️ Unclear</span>' : ''}</div>`;
+        html += `<div class="rx-med-name">💊 ${m.name}${isUnclear ? ' <span style="font-size:12px;color:#f59e0b">⚠️ Unclear</span>' : ''}</div>`;
         html += '<div class="rx-med-pills">';
         if (m.dosage)       html += `<span class="rx-med-pill dosage">📏 ${m.dosage}</span>`;
         if (m.frequency)    html += `<span class="rx-med-pill freq">⏰ ${m.frequency}</span>`;
@@ -1445,24 +1446,28 @@ ${stepsText}
       });
     }
 
-    // ── Lab Tests ─────────────────────────────────────────────────────────────
-    const labs = (data.labTests || []).filter(t => t && t.name);
-    if (labs.length) {
-      html += '<div class="rx-section-label" style="color:#0277bd">🧪 Lab Tests / Results</div>';
+    // ── Existing Lab Results (values already on the document) ────────────────
+    const existingLabs = (data.existingLabResults || []).filter(t => t && t.test);
+    if (existingLabs.length) {
+      html += '<div class="rx-section-label" style="color:#0277bd">🧪 Lab Results (on record)</div>';
       html += '<div class="rx-lab-list">';
-      labs.forEach(t => {
-        const abnClass = t.abnormal ? ' abnormal' : '';
-        html += `<div class="rx-lab-item${abnClass}">`;
-        html += `<span>${t.abnormal ? '⚠️' : '✅'}</span>`;
-        html += `<span class="lab-name">${t.name}</span>`;
-        if (t.result) html += `<span class="lab-result">${t.result}${t.normalRange ? ' (ref: ' + t.normalRange + ')' : ''}</span>`;
-        html += '</div>';
-        if (t.meaning) html += `<div style="font-size:12px;color:var(--ink-muted);padding:2px 14px 8px 38px">${t.meaning}</div>`;
+      existingLabs.forEach(t => {
+        html += `<div class="rx-lab-item"><span>📊</span><span class="lab-name">${t.test}</span><span class="lab-result">${t.value || ''}</span></div>`;
+        waText += `📊 *${t.test}*: ${t.value || ''}\n`;
+      });
+      html += '</div>';
+      waText += '\n';
+    }
 
-        waText += `${t.abnormal ? '⚠️' : '✅'} *${t.name}*`;
-        if (t.result) waText += `: ${t.result}`;
-        if (t.normalRange) waText += ` (ref: ${t.normalRange})`;
-        waText += '\n';
+    // ── Lab Tests Ordered (new tests the doctor is ordering) ─────────────────
+    const orderedLabs = (data.labTestsOrdered || []).filter(Boolean);
+    if (orderedLabs.length) {
+      html += '<div class="rx-section-label" style="color:#6a1b9a">🔬 Tests Ordered</div>';
+      html += '<div class="rx-lab-list">';
+      orderedLabs.forEach(t => {
+        const name = typeof t === 'string' ? t : (t.test || t.name || JSON.stringify(t));
+        html += `<div class="rx-lab-item"><span>🔬</span><span class="lab-name">${name}</span></div>`;
+        waText += `🔬 ${name}\n`;
       });
       html += '</div>';
       waText += '\n';

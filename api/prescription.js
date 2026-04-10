@@ -80,68 +80,77 @@ export default async function handler(req, res) {
   const pageLabel = pages.length === 1 ? '1 page' : `${pages.length} pages`;
 
   // ── PASS 1: Full document read ───────────────────────────────────────────────
-  const pass1Prompt = `You are a medical document reader. Analyze the uploaded prescription or medical document image carefully — including all handwritten text. You are reading ${pageLabel}.${variationsCtx}
+  const systemPrompt = `You are a precise medical document OCR reader. Your job is to extract ONLY what is explicitly written in the image. Do NOT infer, assume, or add any information not visible in the document.`;
 
-Abbreviations to decode: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed, Stat=Immediately, x5/7=5 days, x1/52=1 week, x1/12=1 month.
+  const userPrompt = `Carefully read every part of this handwritten prescription image. You are reading ${pageLabel}.${variationsCtx}
 
-Common Indian medicine brands: Crocin, Dolo, Pan, Augmentin, Azithral, Metformin, Glycomet, Telma, Ecosprin, Shelcal, Combiflam, Allegra, Montair, Omez, Pantop, Taxim, Zifi, Mox, Cifran, Amoxyclav, Atorva, Telmisartan, Cetrizine, Sinarest, Wikoryl, Zerodol, Aciloc, Ranitidine, Sorbitrate.
+Important rules:
+- Extract ONLY medications explicitly written in the prescription. Do not guess drug names.
+- If handwriting is unclear, write your best attempt in brackets e.g. "[unclear: Ostoshine?]"
+- Distinguish between EXISTING lab results (values already written) vs NEW tests being ordered
+- Do not hallucinate drug names from medical knowledge — only extract what is written
+- Abbreviations: OD=Once daily, BD=Twice daily, TDS/TID=Three times daily, QID=Four times daily, HS=At bedtime, AC=Before food, PC=After food, SOS=When needed
 
-Extract and return ONLY this JSON object (no markdown, no explanation):
+Return ONLY this JSON, no extra text, no markdown:
 {
   "document_type": "prescription" | "clinical_note" | "lab_report" | "discharge_summary" | "unknown",
-  "patientDetails": {
-    "name": null,
-    "age": null,
-    "sex": null,
-    "date": null
-  },
+  "patientDetails": { "name": null, "age": null, "sex": null, "date": null },
   "doctor": null,
   "clinic": null,
   "diagnosis": null,
   "medications": [
-    {
-      "name": "Brand name as written",
-      "dosage": "e.g. 500mg",
-      "frequency": "Plain English decoded from abbreviation",
-      "instructions": "Duration, timing, or special instructions",
-      "unclear": false
-    }
+    { "name": "", "dosage": null, "frequency": null, "instructions": null }
   ],
-  "labTests": [
-    {
-      "name": "Test name",
-      "result": "Result with unit or null if not a report",
-      "normalRange": "Normal range or null",
-      "abnormal": false,
-      "meaning": "Plain English explanation"
-    }
+  "existingLabResults": [
+    { "test": "", "value": "" }
   ],
+  "labTestsOrdered": [],
   "recommendations": null,
   "followUp": null,
   "rawNotes": null
 }
 
-Rules:
-- Read ALL handwritten text carefully — do not skip any medicine or instruction
-- For unclear/illegible medicines: give your best guess and mark unclear:true. NEVER leave name empty.
-- If a field is not visible in the document, use null
-- Put any unstructured instructions, advice, or unclassified text in rawNotes
-- If completely unreadable: {"error": "Could not read document"}`;
+If completely unreadable: {"error": "Could not read document"}`;
+
+  function parseJSON(text) {
+    return JSON.parse(text.replace(/```json\n?|```/g, '').trim());
+  }
 
   let pass1Result;
   try {
+    const apiHeaders = { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
+    const pass1Body = {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 3000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: [...contentBlocks, { type: 'text', text: userPrompt }] }],
+    };
+
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 3000,
-        messages: [{ role: 'user', content: [...contentBlocks, { type: 'text', text: pass1Prompt }] }],
-      }),
+      method: 'POST', headers: apiHeaders, body: JSON.stringify(pass1Body),
     });
     const apiResult = await resp.json();
-    const text = apiResult.content?.map(b => b.text || '').join('') || '';
-    pass1Result = JSON.parse(text.replace(/```json\n?|```/g, '').trim());
+    const rawText = apiResult.content?.map(b => b.text || '').join('') || '';
+
+    try {
+      pass1Result = parseJSON(rawText);
+    } catch (_parseErr) {
+      // Retry once: send Claude's malformed output back and ask for clean JSON
+      const retryResp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', headers: apiHeaders,
+        body: JSON.stringify({
+          ...pass1Body,
+          messages: [
+            ...pass1Body.messages,
+            { role: 'assistant', content: rawText },
+            { role: 'user', content: 'Return valid JSON only. No extra text, no markdown, no explanation.' },
+          ],
+        }),
+      });
+      const retryResult = await retryResp.json();
+      const retryText = retryResult.content?.map(b => b.text || '').join('') || '';
+      pass1Result = parseJSON(retryText);
+    }
   } catch (e) {
     return res.status(500).json({ error: 'Failed to read document', detail: e.message });
   }
@@ -149,7 +158,7 @@ Rules:
   if (pass1Result.error) return res.status(200).json(pass1Result);
 
   // ── PASS 2: Resolve unclear medicine names (text-only) ───────────────────────
-  const unclearMeds = (pass1Result.medications || []).filter(m => m.unclear);
+  const unclearMeds = (pass1Result.medications || []).filter(m => m.name?.startsWith('[unclear'));
   if (unclearMeds.length > 0) {
     const pass2Prompt = `Resolve illegible medicine names from an Indian prescription scan.
 
@@ -176,10 +185,10 @@ Return ONLY a JSON array (no markdown):
       const resolutions = JSON.parse(text2.replace(/```json\n?|```/g, '').trim());
       if (Array.isArray(resolutions)) {
         pass1Result.medications = (pass1Result.medications || []).map(m => {
-          if (!m.unclear) return m;
+          if (!m.name?.startsWith('[unclear')) return m;
           const fix = resolutions.find(r => r.original === m.name);
           if (fix && fix.confidence !== 'low') {
-            return { ...m, name: fix.resolved, unclear: false, _originalName: m.name };
+            return { ...m, name: fix.resolved, _originalName: m.name };
           }
           return m;
         });
@@ -200,6 +209,7 @@ Return ONLY a JSON array (no markdown):
             variation: m._originalName || m.name,   // unclear original text, or same as canonical
           }))
           .filter(m => m.canonical && m.canonical !== 'Not mentioned'
+                    && !m.canonical.startsWith('[unclear')
                     && m.canonical.length > 1 && m.canonical.length < 60);
 
         if (medicines.length === 0) {
